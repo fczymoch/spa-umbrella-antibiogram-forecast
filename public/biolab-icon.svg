@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Background circle with gradient -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7dd3fc;stop-opacity:0.6"/>
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+  <!-- Base circle -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Shine overlay -->
+  <rect width="64" height="32" rx="14" fill="url(#glow)" opacity="0.4"/>
+  <!-- Flask / test tube icon -->
+  <!-- Flask body -->
+  <path d="M22 12h20v2H22z" fill="white" opacity="0.9" rx="1"/>
+  <!-- Flask neck -->
+  <rect x="26" y="14" width="12" height="14" rx="1" fill="white" opacity="0.85"/>
+  <!-- Flask base -->
+  <path d="M20 44 c0 0 3-10 12-16 c9 6 12 16 12 16 c0 4-4 6-12 6 c-8 0-12-2-12-6z" fill="white" opacity="0.9"/>
+  <!-- Bubbles inside flask -->
+  <circle cx="29" cy="40" r="2" fill="url(#bg)" opacity="0.7"/>
+  <circle cx="35" cy="43" r="1.5" fill="url(#bg)" opacity="0.7"/>
+  <circle cx="32" cy="36" r="1" fill="url(#bg)" opacity="0.5"/>
+</svg>

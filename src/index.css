@@ -1,0 +1,302 @@
+/* ============================================================
+   BIOLAB — DESIGN TOKENS
+   Fonte única de verdade para cores, espaçamentos, tipografia
+   e sombras. Todos os outros arquivos CSS devem referenciar
+   apenas essas variáveis — nunca valores hardcoded.
+   ============================================================ */
+
+:root {
+  /* --- Tipografia --- */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --font-size-xs:   0.75rem;    /* 12px — labels, badges pequenos */
+  --font-size-sm:   0.875rem;   /* 14px — metadata, muted text */
+  --font-size-base: 1rem;       /* 16px — corpo do texto */
+  --font-size-lg:   1.125rem;   /* 18px — subtítulos */
+  --font-size-xl:   1.25rem;    /* 20px — h3 */
+  --font-size-2xl:  1.5rem;     /* 24px — h2 */
+  --font-size-3xl:  2rem;       /* 32px — h1 página */
+
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  --line-height-tight:  1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ============================================================
+     TEMA — Trocar apenas estas variáveis para mudar o esquema
+     de cores de toda a aplicação.
+     ============================================================ */
+
+  /* Primária */
+  --color-primary:        #2563eb;
+  --color-primary-light:  #0ea5e9;
+  --color-primary-dark:   #0b5ea8;
+  --color-primary-subtle: #eff6ff;
+
+  /* Painel de marca (login) */
+  --brand-panel-from:     #0c1e3c;
+  --brand-panel-mid:      #0f2d55;
+  --brand-panel-mid2:     #1a3a6e;
+  --brand-panel-to:       #0c2340;
+  --brand-panel-glow-1:   rgba(56,189,248,0.2);
+  --brand-panel-glow-2:   rgba(99,102,241,0.2);
+  --brand-panel-text:     #e0f2fe;
+  --brand-panel-accent:   #7dd3fc;
+  --brand-panel-muted:    #bae6fd;
+  --brand-panel-dot:      #38bdf8;
+  --brand-panel-stat-sub: #93c5fd;
+  --brand-panel-desc:     #93c5fd;
+
+  /* Sidebar */
+  --sidebar-bg-from:   #0ea5e9;
+  --sidebar-bg-mid:    #2563eb;
+  --sidebar-bg-to:     #0b5ea8;
+  --sidebar-text:      #e0f2fe;
+  --sidebar-width:     260px;
+
+  /* --- Superfícies --- */
+  --color-bg:           #f5f7fb;
+  --color-bg-secondary: #eef2ff;
+  --color-surface:      #ffffff;
+  --color-surface-raised: #f3f6ff;
+
+  /* --- Texto --- */
+  --color-text:         #0f172a;
+  --color-text-muted:   #64748b;
+  --color-text-subtle:  #94a3b8;
+  --color-text-on-primary: #ffffff;
+
+  /* --- Bordas --- */
+  --color-border:       #e2e8f0;
+  --color-border-focus: #38bdf8;
+
+  /* --- Status: Liberado / Sensível (verde) --- */
+  --color-ok-bg:     #ecfdf3;
+  --color-ok-text:   #15803d;
+  --color-ok-border: #bbf7d0;
+
+  /* --- Status: Em análise / Intermediário (amarelo-laranja) --- */
+  --color-warn-bg:     #fffbeb;
+  --color-warn-text:   #c2410c;
+  --color-warn-border: #fed7aa;
+
+  /* --- Status: Pendente (índigo) --- */
+  --color-pending-bg:     #eef2ff;
+  --color-pending-text:   #4338ca;
+  --color-pending-border: #c7d2fe;
+
+  /* --- Status: Resistente / Vermelho --- */
+  --color-alert-bg:     #fef2f2;
+  --color-alert-text:   #b91c1c;
+  --color-alert-border: #fecdd3;
+
+  /* --- Status: Intermediário (amarelo) --- */
+  --color-mid-bg:     #fef9c3;
+  --color-mid-text:   #854d0e;
+  --color-mid-border: #fcd34d;
+
+  /* --- Espaçamento (escala 4px) --- */
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.25rem;   /* 20px */
+  --space-6:  1.5rem;    /* 24px */
+  --space-8:  2rem;      /* 32px */
+  --space-10: 2.5rem;    /* 40px */
+  --space-12: 3rem;      /* 48px */
+
+  /* --- Border radius --- */
+  --radius-sm:   0.375rem;   /*  6px */
+  --radius-md:   0.75rem;    /* 12px */
+  --radius-lg:   1rem;       /* 16px */
+  --radius-xl:   1.25rem;    /* 20px */
+  --radius-full: 9999px;
+
+  /* --- Sombras --- */
+  --shadow-sm:  0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md:  0 4px 12px rgba(99, 102, 241, 0.10), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --shadow-lg:  0 14px 30px rgba(99, 102, 241, 0.12), 0 4px 10px rgba(15, 23, 42, 0.08);
+  --shadow-xl:  0 22px 48px rgba(14, 165, 233, 0.18);
+  --shadow-sidebar: 0 18px 38px rgba(37, 99, 235, 0.25);
+
+  /* --- Transições --- */
+  --transition-fast:   150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow:   400ms ease;
+}
+
+/* ============================================================
+   DARK MODE — [data-theme="dark"] no <html>
+   ============================================================ */
+
+[data-theme="dark"] {
+  /* Superfícies */
+  --color-bg:              #0f172a;
+  --color-bg-secondary:    #1a2235;
+  --color-surface:         #1e293b;
+  --color-surface-raised:  #263347;
+
+  /* Texto */
+  --color-text:            #e2e8f0;
+  --color-text-muted:      #94a3b8;
+  --color-text-subtle:     #64748b;
+
+  /* Bordas */
+  --color-border:          #2d3f56;
+  --color-border-focus:    #38bdf8;
+
+  /* Primária */
+  --color-primary:         #3b82f6;
+  --color-primary-light:   #38bdf8;
+  --color-primary-dark:    #2563eb;
+  --color-primary-subtle:  #1e3a5f;
+
+  /* Painel de marca (login) — dark mantém igual ao light */
+  --brand-panel-from:      #0c1e3c;
+  --brand-panel-mid:       #0f2d55;
+  --brand-panel-mid2:      #1a3a6e;
+  --brand-panel-to:        #0c2340;
+  --brand-panel-glow-1:    rgba(56,189,248,0.2);
+  --brand-panel-glow-2:    rgba(99,102,241,0.2);
+  --brand-panel-text:      #e0f2fe;
+  --brand-panel-accent:    #7dd3fc;
+  --brand-panel-muted:     #bae6fd;
+  --brand-panel-dot:       #38bdf8;
+  --brand-panel-stat-sub:  #93c5fd;
+  --brand-panel-desc:      #93c5fd;
+
+  /* Status — mantidos legíveis no escuro */
+  --color-ok-bg:           #052e16;
+  --color-ok-text:         #4ade80;
+  --color-ok-border:       #166534;
+
+  --color-warn-bg:         #1c1004;
+  --color-warn-text:       #fb923c;
+  --color-warn-border:     #92400e;
+
+  --color-pending-bg:      #1e1b4b;
+  --color-pending-text:    #a5b4fc;
+  --color-pending-border:  #3730a3;
+
+  --color-alert-bg:        #1f0505;
+  --color-alert-text:      #f87171;
+  --color-alert-border:    #7f1d1d;
+
+  --color-mid-bg:          #1a1100;
+  --color-mid-text:        #fcd34d;
+  --color-mid-border:      #713f12;
+
+  /* Sidebar — gradiente azul */
+  --sidebar-bg-from:       #0c4a6e;
+  --sidebar-bg-mid:        #1d4ed8;
+  --sidebar-bg-to:         #1e3a5f;
+
+  /* Sombras mais suaves no escuro */
+  --shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md:     0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg:     0 14px 30px rgba(0, 0, 0, 0.45);
+  --shadow-xl:     0 22px 48px rgba(0, 0, 0, 0.5);
+  --shadow-sidebar: 0 18px 38px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================
+   RESET & BASE GLOBAL
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  color: var(--color-text);
+}
+
+p {
+  margin: 0;
+}
+
+ul, ol {
+  margin: 0;
+  padding: 0;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ============================================================
+   ACESSIBILIDADE GLOBAL
+   ============================================================ */
+
+/* Skip-to-content: visível apenas ao receber foco */
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 9999;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  border-radius: var(--radius-md);
+  transform: translateY(-200%);
+  transition: transform var(--transition-fast);
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Focus-visible global: anel de foco consistente em todo o app */
+:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+/* Remove outline padrão do navegador onde aplicamos :focus-visible */
+:focus:not(:focus-visible) {
+  outline: none;
+}
