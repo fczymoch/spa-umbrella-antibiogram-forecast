@@ -185,30 +185,80 @@ details[open] summary::after {
 
 .user-chip {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
   padding: var(--space-3);
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.10);
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: var(--brand-panel-text);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.user-chip__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #fff;
+  font-weight: var(--font-weight-bold);
+  font-size: var(--font-size-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-chip__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .user-chip p {
   margin: 0;
-  color: var(--brand-panel-text);
+  color: #ffffff;
   font-weight: var(--font-weight-semibold);
   font-size: var(--font-size-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .user-chip span {
   color: var(--color-primary-dark);
   font-size: var(--font-size-xs);
   background: var(--brand-panel-text);
-  padding: var(--space-1) var(--space-2);
+  padding: 1px var(--space-2);
   border-radius: var(--radius-full);
   display: inline-block;
   font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+/* Botão de logout */
+.nav-logout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.75);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.nav-logout:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
 }
 
 /* ============================================================
@@ -2275,6 +2325,14 @@ textarea {
   align-items: center;
   gap: var(--space-3);
   flex-shrink: 0;
+}
+
+/* Agrupa toggle de tema + user */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
 .topbar-avatar {
