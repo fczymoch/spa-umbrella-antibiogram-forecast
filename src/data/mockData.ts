@@ -78,7 +78,7 @@ export const exams: Exam[] = [
   {
     id: 'ex3', patientId: 'p3', doctorId: 'd1',
     organism: 'Staphylococcus aureus (MRSA)', specimen: 'Swab nasal',
-    collectedAt: '2026-03-01 08:05', status: 'Liberado', source: 'OneDrive',
+    collectedAt: '2026-03-01 08:05', status: 'Finalizado', source: 'OneDrive',
     previewUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=900&q=80',
     site: 'Day Clinic', notes: 'Rastreamento pré-cirúrgico.',
     antibiogram: [
@@ -92,7 +92,7 @@ export const exams: Exam[] = [
   {
     id: 'ex4', patientId: 'p4', doctorId: 'd3',
     organism: 'Acinetobacter baumannii', specimen: 'Aspirado traqueal',
-    collectedAt: '2026-03-02 03:30', status: 'Liberado', source: 'OneDrive',
+    collectedAt: '2026-03-02 03:30', status: 'Pendente de avaliação', source: 'OneDrive',
     previewUrl: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=900&q=80',
     site: 'UTI - Leito 01', notes: 'Paciente intubado; MDR confirmado.',
     antibiogram: [
@@ -120,7 +120,7 @@ export const exams: Exam[] = [
   {
     id: 'ex6', patientId: 'p6', doctorId: 'd5',
     organism: 'Streptococcus pneumoniae', specimen: 'Escarro',
-    collectedAt: '2026-03-02 11:00', status: 'Liberado', source: 'Bucket',
+    collectedAt: '2026-03-02 11:00', status: 'Pendente de avaliação', source: 'Bucket',
     previewUrl: 'https://images.unsplash.com/photo-1530026186672-2cd00ffc50fe?auto=format&fit=crop&w=900&q=80',
     site: 'Enfermaria 212', notes: 'PAC. Iniciar amoxicilina conforme resultado.',
     antibiogram: [
@@ -161,7 +161,7 @@ export const exams: Exam[] = [
   {
     id: 'ex9', patientId: 'p9', doctorId: 'd3',
     organism: 'Klebsiella pneumoniae KPC', specimen: 'Aspirado traqueal',
-    collectedAt: '2026-03-03 09:00', status: 'Liberado', source: 'Bucket',
+    collectedAt: '2026-03-03 09:00', status: 'Pendente de avaliação', source: 'Bucket',
     previewUrl: 'https://images.unsplash.com/photo-1581092921461-eab62e97a780?auto=format&fit=crop&w=900&q=80',
     site: 'UTI - Leito 07', notes: 'KPC detectada; ceftazidima/avibactam solicitada.',
     antibiogram: [
@@ -175,7 +175,7 @@ export const exams: Exam[] = [
   {
     id: 'ex10', patientId: 'p10', doctorId: 'd1',
     organism: 'Escherichia coli', specimen: 'Urina',
-    collectedAt: '2026-03-03 16:30', status: 'Liberado', source: 'Bucket',
+    collectedAt: '2026-03-03 16:30', status: 'Finalizado', source: 'Bucket',
     previewUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=900&q=80',
     site: 'Enfermaria 310',
     antibiogram: [
@@ -229,7 +229,7 @@ export const exams: Exam[] = [
   {
     id: 'ex14', patientId: 'p4', doctorId: 'd3',
     organism: 'Acinetobacter baumannii', specimen: 'Hemocultura',
-    collectedAt: '2026-03-05 04:15', status: 'Liberado', source: 'OneDrive',
+    collectedAt: '2026-03-05 04:15', status: 'Finalizado', source: 'OneDrive',
     previewUrl: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?auto=format&fit=crop&w=900&q=80',
     site: 'UTI - Leito 01', notes: 'Bacteremia secundária.',
     antibiogram: [
@@ -256,7 +256,7 @@ export const exams: Exam[] = [
   {
     id: 'ex16', patientId: 'p1', doctorId: 'd4',
     organism: 'Escherichia coli ESBL', specimen: 'Hemocultura',
-    collectedAt: '2026-03-05 16:00', status: 'Liberado', source: 'OneDrive',
+    collectedAt: '2026-03-05 16:00', status: 'Pendente de avaliação', source: 'OneDrive',
     previewUrl: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=900&q=80',
     site: 'Enfermaria 204', notes: 'Urossepse confirmada.',
     antibiogram: [
@@ -282,7 +282,7 @@ export const exams: Exam[] = [
   {
     id: 'ex18', patientId: 'p5', doctorId: 'd4',
     organism: 'Pseudomonas aeruginosa MDR', specimen: 'Secreção ferida',
-    collectedAt: '2026-03-06 13:45', status: 'Liberado', source: 'Bucket',
+    collectedAt: '2026-03-06 13:45', status: 'Finalizado', source: 'Bucket',
     previewUrl: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?auto=format&fit=crop&w=900&q=80',
     site: 'Enfermaria 108', notes: 'Sem melhora com cefepima. MDR comprovado.',
     antibiogram: [

@@ -36,7 +36,7 @@ export type Exam = {
   organism: string
   specimen: string
   collectedAt: string
-  status: 'Pendente' | 'Em análise' | 'Liberado'
+  status: 'Pendente' | 'Em análise' | 'Pendente de avaliação' | 'Finalizado'
   source: 'OneDrive' | 'Bucket'
   previewUrl: string
   antibiogram: AntibiogramEntry[]

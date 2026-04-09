@@ -71,13 +71,13 @@ export function DoctorDetailPage({ doctors, exams, patients }: DoctorDetailPageP
           <p className="muted small">Total solicitados</p>
         </section>
         <section className="card stat">
-          <p className="muted">Liberados</p>
-          <p className="stat-value">{statusCounts['Liberado'] || 0}</p>
+          <p className="muted">Finalizados</p>
+          <p className="stat-value">{statusCounts['Finalizado'] || 0}</p>
           <p className="muted small">Laudos prontos</p>
         </section>
         <section className="card stat">
           <p className="muted">Pendentes</p>
-          <p className="stat-value">{(statusCounts['Pendente'] || 0) + (statusCounts['Em análise'] || 0)}</p>
+          <p className="stat-value">{(statusCounts['Pendente'] || 0) + (statusCounts['Em análise'] || 0) + (statusCounts['Pendente de avaliação'] || 0)}</p>
           <p className="muted small">Aguardando resultado</p>
         </section>
       </div>

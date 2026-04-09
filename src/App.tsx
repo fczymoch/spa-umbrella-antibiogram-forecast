@@ -14,7 +14,7 @@ import {
   PatientDetailPage,
   AdminPage,
 } from './pages/index.ts'
-import { appointments, doctors, exams, initialAttachments, patients } from './data/mockData.ts'
+import { doctors, exams, initialAttachments, patients } from './data/mockData.ts'
 import type { Attachment, User } from './types.ts'
 import { useLocalStorage } from './hooks/useLocalStorage.ts'
 import './App.css'
@@ -23,7 +23,6 @@ function App() {
   const [user, setUser] = useState<User | null>(null)
   const [attachments, setAttachments] = useLocalStorage<Attachment[]>('biolab:attachments', initialAttachments)
 
-  const memoAppointments = useMemo(() => appointments, [])
   const memoPatients = useMemo(() => patients, [])
   const memoDoctors = useMemo(() => doctors, [])
   const memoExams = useMemo(() => exams, [])
@@ -74,8 +73,8 @@ function App() {
                   <HomePage
                     user={user}
                     attachments={attachments}
-                    appointments={memoAppointments}
                     exams={memoExams}
+                    patients={memoPatients}
                   />
                 )
               }

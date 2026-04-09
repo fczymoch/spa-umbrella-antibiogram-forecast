@@ -74,7 +74,7 @@
   --color-border:       #e2e8f0;
   --color-border-focus: #38bdf8;
 
-  /* --- Status: Liberado / Sensível (verde) --- */
+  /* --- Status: Finalizado / Sensível (verde) --- */
   --color-ok-bg:     #ecfdf3;
   --color-ok-text:   #15803d;
   --color-ok-border: #bbf7d0;
@@ -88,6 +88,11 @@
   --color-pending-bg:     #eef2ff;
   --color-pending-text:   #4338ca;
   --color-pending-border: #c7d2fe;
+
+  /* --- Status: Pendente de avaliação (azul) --- */
+  --color-info-bg:     #eff6ff;
+  --color-info-text:   #1d4ed8;
+  --color-info-border: #bfdbfe;
 
   /* --- Status: Resistente / Vermelho --- */
   --color-alert-bg:     #fef2f2;

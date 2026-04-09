@@ -78,10 +78,10 @@ export function LandingPage() {
                   ))}
                 </div>
                 {[
-                  { org: 'Klebsiella pneumoniae', status: 'Em análise', color: '#fbbf24' },
-                  { org: 'E. coli ESBL', status: 'Pendente', color: '#6366f1' },
-                  { org: 'S. aureus MRSA', status: 'Liberado', color: '#22c55e' },
-                  { org: 'A. baumannii MDR', status: 'Liberado', color: '#22c55e' },
+                  { org: 'Klebsiella pneumoniae', status: 'Em análise',            color: '#fbbf24' },
+                  { org: 'E. coli ESBL',          status: 'Pendente',               color: '#6366f1' },
+                  { org: 'S. aureus MRSA',         status: 'Pendente de avaliação',  color: '#3b82f6' },
+                  { org: 'A. baumannii MDR',       status: 'Finalizado',             color: '#22c55e' },
                 ].map((row) => (
                   <div key={row.org} className="landing-mockup__row">
                     <span className="landing-mockup__org">{row.org}</span>

@@ -1,9 +1,10 @@
 import type { AntibiogramEntry, Exam, Patient } from '../types.ts'
 
 export function statusClass(status: Exam['status'] | string) {
-  if (status === 'Liberado') return 'ok'
+  if (status === 'Finalizado') return 'ok'
   if (status === 'Em análise' || status === 'Sensível') return 'warn'
   if (status === 'Pendente') return 'pending'
+  if (status === 'Pendente de avaliação') return 'info'
   if (status === 'Resistente') return 'alert'
   if (status === 'Intermediário') return 'mid'
   return 'soft'

@@ -1,19 +1,127 @@
 import { useMemo } from 'react'
 import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Legend, Tooltip } from 'chart.js'
-import type { Appointment, Attachment, Exam, User } from '../types.ts'
+import type { Attachment, Exam, Patient, User } from '../types.ts'
 import { statusClass } from '../utils/status.ts'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
+// ── Inline SVG icons ─────────────────────────────────────────
+function IconFlask() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3h6M9 3v7l-4.5 8A2 2 0 0 0 6.31 21h11.38a2 2 0 0 0 1.81-3L15 10V3M9 3H6M15 3h3" />
+    </svg>
+  )
+}
+function IconPaperclip() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  )
+}
+function IconCalendar() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  )
+}
+function IconBug() {
+  return (
+    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 9a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0V9z" />
+      <path d="M5 8h2M17 8h2M5 16h2M17 16h2M9 3c0 0 1-1 3-1s3 1 3 1M9 21c0 0 1 1 3 1s3-1 3-1" />
+    </svg>
+  )
+}
+function IconSearch() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.35-4.35" />
+    </svg>
+  )
+}
+function IconBarChart() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 20V10M12 20V4M6 20v-6" />
+    </svg>
+  )
+}
+function IconUpload() {
+  return (
+    <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </svg>
+  )
+}
+function IconFile() {
+  return (
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <polyline points="14 2 14 8 20 8" />
+    </svg>
+  )
+}
+function IconClock() {
+  return (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
+}
+// ─────────────────────────────────────────────────────────────
+
+/** Retorna string legível de tempo decorrido desde uma data 'YYYY-MM-DD HH:mm' */
+function elapsedLabel(dateStr: string): string {
+  const [datePart, timePart] = dateStr.split(' ')
+  const [y, mo, d] = datePart.split('-').map(Number)
+  const [h, mi] = (timePart ?? '00:00').split(':').map(Number)
+  const then = new Date(y, mo - 1, d, h, mi)
+  const diffMs = Date.now() - then.getTime()
+  const diffH = Math.floor(diffMs / 3_600_000)
+  if (diffH < 1) return 'há menos de 1h'
+  if (diffH < 24) return `há ${diffH}h`
+  const diffD = Math.floor(diffH / 24)
+  if (diffD === 1) return 'há 1 dia'
+  return `há ${diffD} dias`
+}
+
 interface HomePageProps {
   user: User
   attachments: Attachment[]
-  appointments: Appointment[]
   exams: Exam[]
+  patients: Patient[]
 }
 
-export function HomePage({ user, attachments, appointments, exams }: HomePageProps) {
+const STATUS_LEGEND = [
+  { key: 'Finalizado',             color: '#22c55e', label: 'Finalizado'             },
+  { key: 'Pendente de avaliação',  color: '#3b82f6', label: 'Pend. de avaliação'     },
+  { key: 'Em análise',             color: '#fbbf24', label: 'Em análise'             },
+  { key: 'Pendente',               color: '#6366f1', label: 'Pendente'               },
+] as const
+
+export function HomePage({ user, attachments, exams, patients }: HomePageProps) {
+  const patientMap = useMemo(
+    () => patients.reduce<Record<string, string>>((acc, p) => { acc[p.id] = p.name; return acc }, {}),
+    [patients]
+  )
   const statusSummary = useMemo(() => {
     return exams.reduce(
       (acc, exam) => {
@@ -24,104 +132,220 @@ export function HomePage({ user, attachments, appointments, exams }: HomePagePro
     )
   }, [exams])
 
+  /** Últimos exames finalizados */
+  const recentDoneExams = useMemo(() => {
+    return exams
+      .filter((e) => e.status === 'Finalizado')
+      .slice(0, 6)
+  }, [exams])
+
   const chartData = useMemo(() => {
-    const labels: Exam['status'][] = ['Liberado', 'Em análise', 'Pendente']
+    const labels = STATUS_LEGEND.map((s) => s.key)
     const values = labels.map((label) => statusSummary[label] || 0)
     return {
       labels,
       datasets: [
         {
           data: values,
-          backgroundColor: ['#22c55e', '#fbbf24', '#6366f1'],
+          backgroundColor: STATUS_LEGEND.map((s) => s.color),
           borderWidth: 0,
         },
       ],
     }
   }, [statusSummary])
 
+  const chartOptions = useMemo(() => ({
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: true },
+    },
+    cutout: '68%',
+  }), [])
+
   return (
     <div className="page">
+      {/* ── Header ─────────────────────────────────────── */}
       <div className="page-header">
         <div>
-          <p className="muted">Bem-vindo(a), {user.name}</p>
+          <p className="eyebrow">Dashboard</p>
           <h1>Painel de Antibiogramas</h1>
-          <p className="muted">Turno: {user.shift}</p>
+          <p className="muted">
+            Bem-vindo(a), <strong>{user.name}</strong> · Turno: {user.shift}
+          </p>
         </div>
-        <div className="badge">Monitoramento focado em resistência bacteriana</div>
+        <div className="badge soft">Resistência bacteriana</div>
       </div>
 
-      <div className="grid">
+      {/* ── Stat cards ─────────────────────────────────── */}
+      <div className="stats-grid home-stats">
+        <div className="stat stat--primary">
+          <div className="stat__icon stat__icon--primary">
+            <IconFlask />
+          </div>
+          <div className="stat__body">
+            <p className="muted">Antibiogramas</p>
+            <p className="stat-value">{exams.length}</p>
+            <p className="muted small">Coletas monitoradas</p>
+          </div>
+        </div>
+        <div className="stat stat--info">
+          <div className="stat__icon stat__icon--info">
+            <IconPaperclip />
+          </div>
+          <div className="stat__body">
+            <p className="muted">Anexos</p>
+            <p className="stat-value">{attachments.length}</p>
+            <p className="muted small">Laudos e imagens</p>
+          </div>
+        </div>
+        <div className="stat stat--accent">
+          <div className="stat__icon stat__icon--accent">
+            <IconCalendar />
+          </div>
+          <div className="stat__body">
+            <p className="muted">Finalizados</p>
+            <p className="stat-value">{statusSummary['Finalizado'] || 0}</p>
+            <p className="muted small">Resultados disponíveis</p>
+          </div>
+        </div>
+        <div className="stat stat--warn">
+          <div className="stat__icon stat__icon--warn">
+            <IconBug />
+          </div>
+          <div className="stat__body">
+            <p className="muted">Pendentes</p>
+            <p className="stat-value">{statusSummary['Pendente'] || 0}</p>
+            <p className="muted small">Aguardando resultado</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Sobre a aplicação ──────────────────────────── */}
+      <div className="home-main-grid">
+        {/* Guia de uso */}
         <section className="card">
           <div className="card-header">
             <h3>Sobre a aplicação</h3>
             <span className="pill subtle">Como usar</span>
           </div>
-          <p className="muted">
-            Esta aplicação foi desenhada para acompanhamento rápido de <strong>antibiogramas</strong> em contextos de UTI e clínica.
-            Use o menu lateral para navegar entre a visão geral, filtragens por paciente ou médico, e detalhes completos do laudo.
+          <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+            Plataforma clínica para acompanhamento de <strong>antibiogramas</strong> em UTI e contextos de alta complexidade.
+            Monitore resistência bacteriana, tempo de processamento e laudos em tempo real.
           </p>
-          <div className="chips">
-            <span className="pill subtle">Navegue por antibiogramas</span>
-            <span className="pill subtle">Visualize MIC e interpretações</span>
-            <span className="pill subtle">Anexe laudos e imagens</span>
+          <div className="home-quick-actions">
+            <div className="home-quick-action">
+              <span className="home-quick-action__icon"><IconBarChart /></span>
+              <div>
+                <p className="list-title">Visão geral de status</p>
+                <p className="muted small">Acompanhe o fluxo completo: <em>Pendente</em> → <em>Em análise</em> → <em>Pendente de avaliação</em> → <em>Finalizado</em>. Exames em análise por mais de 48h são sinalizados automaticamente.</p>
+              </div>
+            </div>
+            <div className="home-quick-action">
+              <span className="home-quick-action__icon home-quick-action__icon--warn"><IconClock /></span>
+              <div>
+                <p className="list-title">Tempo em andamento</p>
+                <p className="muted small">Cada exame exibe quanto tempo decorreu desde a coleta. Exames <em>Pendentes</em> acima de 24h e <em>Pendentes de avaliação</em> acima de 12h indicam necessidade de atenção clínica.</p>
+              </div>
+            </div>
+            <div className="home-quick-action">
+              <span className="home-quick-action__icon"><IconSearch /></span>
+              <div>
+                <p className="list-title">Busca por paciente ou médico</p>
+                <p className="muted small">Filtro avançado no submenu Antibiogramas — localise rapidamente um laudo por nome, leito ou especialidade.</p>
+              </div>
+            </div>
+            <div className="home-quick-action">
+              <span className="home-quick-action__icon"><IconFlask /></span>
+              <div>
+                <p className="list-title">Detalhe do laudo</p>
+                <p className="muted small">Visualize MIC, interpretação (S/I/R) e perfil completo de sensibilidade com gráfico de concentração inibitória.</p>
+              </div>
+            </div>
+            <div className="home-quick-action">
+              <span className="home-quick-action__icon"><IconUpload /></span>
+              <div>
+                <p className="list-title">Anexos clínicos</p>
+                <p className="muted small">Suba PDFs e imagens diretamente ao prontuário do paciente com notas de contexto clínico.</p>
+              </div>
+            </div>
           </div>
-          <ul className="list" style={{ marginTop: 'var(--space-2)' }}>
-            <li className="list-row">
-              <div>
-                <p className="list-title">1. Visão geral</p>
-                <p className="muted small">Acompanhe status (Liberado, Em análise, Pendente) e quantidade por fonte (OneDrive/Bucket).</p>
-              </div>
-            </li>
-            <li className="list-row">
-              <div>
-                <p className="list-title">2. Filtro por paciente ou médico</p>
-                <p className="muted small">Acesse o submenu Antibiogramas para mudar o modo de busca.</p>
-              </div>
-            </li>
-            <li className="list-row">
-              <div>
-                <p className="list-title">3. Detalhe completo</p>
-                <p className="muted small">Clique em "Ver detalhe" para abrir MIC, interpretação e perfil de sensibilidade em gráfico.</p>
-              </div>
-            </li>
-            <li className="list-row">
-              <div>
-                <p className="list-title">4. Anexos</p>
-                <p className="muted small">Suba PDFs ou imagens de laudos com contexto clínico.</p>
-              </div>
-            </li>
-          </ul>
         </section>
 
+        {/* Últimos exames realizados */}
         <section className="card">
           <div className="card-header">
-            <h3>Resumo rápido</h3>
-            <span className="pill subtle">Antibiogramas</span>
+            <h3>Últimos exames finalizados</h3>
+            <span className="pill subtle">{recentDoneExams.length} finalizados</span>
           </div>
-          <div className="stats-grid">
-            <div className="card stat">
-              <p className="muted">Antibiogramas</p>
-              <p className="stat-value">{exams.length}</p>
-              <p className="muted small">Últimas coletas monitoradas</p>
-            </div>
-            <div className="card stat">
-              <p className="muted">Anexos</p>
-              <p className="stat-value">{attachments.length}</p>
-              <p className="muted small">Laudos e imagens enviados</p>
-            </div>
-            <div className="card stat">
-              <p className="muted">Consultas</p>
-              <p className="stat-value">{appointments.length}</p>
-              <p className="muted small">Próximas 24h</p>
-            </div>
-          </div>
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Doughnut data={chartData} />
-          </div>
+          <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+            Antibiogramas com laudo finalizado mais recentemente.
+          </p>
+          {recentDoneExams.length === 0 ? (
+            <p className="muted small">Nenhum exame finalizado ainda.</p>
+          ) : (
+            <ul className="list">
+              {recentDoneExams.map((exam) => (
+                <li key={exam.id} className="list-row">
+                  <div className="list-row__icon">
+                    <IconFlask />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
+                    <p className="muted small">{exam.organism} · {exam.specimen}</p>
+                  </div>
+                  <div className="list-meta">
+                    <span className="pill status ok">Finalizado</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
 
+      {/* ── Dashboard — row própria ─────────────────────── */}
+      <section className="card">
+        <div className="card-header">
+          <h3>Dashboard</h3>
+          <span className="pill subtle">Distribuição de status</span>
+        </div>
+        <div className="home-chart-wrap">
+          <div className="home-chart-donut">
+            <Doughnut data={chartData} options={chartOptions} />
+          </div>
+          <ul className="home-chart-legend">
+            {STATUS_LEGEND.map((s) => {
+              const count = statusSummary[s.key] || 0
+              const pct = exams.length > 0 ? Math.round((count / exams.length) * 100) : 0
+              return (
+                <li key={s.key} className="home-chart-legend__item">
+                  <div className="home-chart-legend__row">
+                    <span className="home-chart-legend__dot" style={{ background: s.color }} />
+                    <span className="home-chart-legend__label">{s.label}</span>
+                    <span className="home-chart-legend__count">{count}</span>
+                  </div>
+                  <div className="home-chart-legend__bar-track">
+                    <div
+                      className="home-chart-legend__bar-fill"
+                      style={{ width: `${pct}%`, background: s.color }}
+                    />
+                  </div>
+                </li>
+              )
+            })}
+            <li style={{ paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border)' }}>
+              <p className="muted small">Total de exames monitorados</p>
+              <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', margin: '2px 0 0', color: 'var(--color-text)' }}>
+                {exams.length}
+              </p>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      {/* ── Second grid ────────────────────────────────── */}
       <div className="grid">
+        {/* Antibiogramas recentes */}
         <section className="card">
           <div className="card-header">
             <h3>Antibiogramas recentes</h3>
@@ -130,55 +354,75 @@ export function HomePage({ user, attachments, appointments, exams }: HomePagePro
           <ul className="list">
             {exams.slice(0, 4).map((exam) => (
               <li key={exam.id} className="list-row">
-                <div>
-                  <p className="list-title">{exam.organism}</p>
-                  <p className="muted small">{exam.specimen} • {exam.site}</p>
-                  <p className="muted small">Fonte: {exam.source}</p>
+                <div className="list-row__icon">
+                  <IconFlask />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
+                  <p className="muted small">{exam.organism} · {exam.specimen}</p>
+                  {(exam.status === 'Em análise' || exam.status === 'Pendente') && (
+                    <p className="muted small" style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <IconClock /> {elapsedLabel(exam.collectedAt)}
+                    </p>
+                  )}
                 </div>
                 <div className="list-meta">
                   <span className={`pill status ${statusClass(exam.status)}`}>{exam.status}</span>
-                  <span className="muted small">Coleta: {exam.collectedAt}</span>
                 </div>
               </li>
             ))}
           </ul>
         </section>
 
+        {/* Em análise */}
         <section className="card">
           <div className="card-header">
-            <h3>Agenda</h3>
-            <span className="pill subtle">Próximos atendimentos</span>
+            <h3>Em análise</h3>
+            <span className="pill subtle">Em processamento</span>
           </div>
           <ul className="list">
-            {appointments.map((item) => (
-              <li key={item.id} className="list-row">
-                <div>
-                  <p className="list-title">{item.patient}</p>
-                  <p className="muted small">{item.type}</p>
+            {exams.filter(e => e.status === 'Em análise').length === 0 ? (
+              <li className="list-row"><p className="muted small">Nenhum exame em análise no momento.</p></li>
+            ) : exams.filter(e => e.status === 'Em análise').map((exam) => (
+              <li key={exam.id} className="list-row">
+                <div className="list-row__icon">
+                  <IconFlask />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
+                  <p className="muted small">{exam.organism} · {exam.specimen}</p>
                 </div>
                 <div className="list-meta">
-                  <span className="muted">{item.schedule}</span>
-                  <span className="pill subtle">{item.location}</span>
+                  <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
+                    <IconClock /> {elapsedLabel(exam.collectedAt)}
+                  </span>
+                  <span className="pill status warn">Em análise</span>
                 </div>
               </li>
             ))}
           </ul>
         </section>
 
+        {/* Anexos */}
         <section className="card">
           <div className="card-header">
-            <h3>Anexos</h3>
-            <span className="pill subtle">Últimos uploads</span>
+            <h3>Últimos anexos</h3>
+            <span className="pill subtle">Uploads</span>
           </div>
           <ul className="list">
             {attachments.slice(0, 5).map((item) => (
               <li key={item.id} className="list-row">
-                <div>
+                <div className="list-row__icon list-row__icon--file">
+                  <IconFile />
+                </div>
+                <div style={{ flex: 1 }}>
                   <p className="list-title">{item.fileName}</p>
                   <p className="muted small">{item.notes || item.type}</p>
                 </div>
                 <div className="list-meta">
-                  <span className="muted">{item.uploadedAt}</span>
+                  <span className="muted list-meta__source">
+                    <IconClock /> {item.uploadedAt}
+                  </span>
                   <span className="pill subtle">{item.size}</span>
                 </div>
               </li>

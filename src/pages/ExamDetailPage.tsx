@@ -39,8 +39,13 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
     })
   }
 
-  const statusSteps = ['Pendente', 'Em análise', 'Liberado']
-  const currentStatusIndex = exam ? statusSteps.indexOf(exam.status) : -1
+  const statusSteps = [
+    { label: 'Pendente',              description: 'Antibiograma criado, aguardando início da análise' },
+    { label: 'Em análise',            description: 'IA processando as fotos do exame'                  },
+    { label: 'Pendente de avaliação', description: 'Análise de IA concluída, aguardando avaliação médica' },
+    { label: 'Finalizado',            description: 'Médico avaliou e o laudo está disponível'          },
+  ]
+  const currentStatusIndex = exam ? statusSteps.findIndex((s) => s.label === exam.status) : -1
 
   const chartData = useMemo(() => {
     if (!exam) return null
@@ -100,17 +105,18 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
             const isCurrent = index === currentStatusIndex
             return (
               <div
-                key={step}
+                key={step.label}
                 className={`pipeline-step${!isActive ? ' inactive' : ''}`}
               >
                 <div className={`pipeline-thumb${isCurrent ? ' current' : ''}`}>
                   {isActive && exam.previewUrl ? (
-                    <img src={exam.previewUrl} alt={step} />
+                    <img src={exam.previewUrl} alt={step.label} />
                   ) : (
                     <span className="muted small">Aguardando</span>
                   )}
                 </div>
-                <span className={`pill ${isCurrent ? 'status ok' : 'subtle'}`}>{step}</span>
+                <span className={`pill ${isCurrent ? `status ${statusClass(step.label)}` : 'subtle'}`}>{step.label}</span>
+                <p className="muted small" style={{ marginTop: 4, textAlign: 'center' }}>{step.description}</p>
               </div>
             )
           })}
