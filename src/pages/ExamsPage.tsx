@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { Doctor, Exam, Patient, User } from '../types.ts'
 import { statusClass } from '../utils/status.ts'
-
 interface ExamsPageProps {
   exams: Exam[]
   patients: Patient[]
@@ -114,6 +113,13 @@ export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
           <p className="muted">Monitoramento de laudos</p>
           <h1>Antibiogramas</h1>
         </div>
+        <Link to="/app/exams/new" className="btn btn--primary btn--cta">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Novo antibiograma
+        </Link>
       </div>
 
       <div className="card filter-panel">

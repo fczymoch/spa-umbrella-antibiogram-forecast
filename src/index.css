@@ -140,6 +140,8 @@
    ============================================================ */
 
 [data-theme="dark"] {
+  color-scheme: dark;
+
   /* Superfícies */
   --color-bg:              #0f172a;
   --color-bg-secondary:    #1a2235;
@@ -187,6 +189,10 @@
   --color-pending-bg:      #1e1b4b;
   --color-pending-text:    #a5b4fc;
   --color-pending-border:  #3730a3;
+
+  --color-info-bg:         #0f2340;
+  --color-info-text:       #93c5fd;
+  --color-info-border:     #1e40af;
 
   --color-alert-bg:        #1f0505;
   --color-alert-text:      #f87171;

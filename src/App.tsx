@@ -7,12 +7,15 @@ import {
   DoctorDetailPage,
   ExamDetailPage,
   ExamsPage,
+  NewExamPage,
   HomePage,
   LoginPage,
   ProfilePage,
   PatientsPage,
   PatientDetailPage,
   AdminPage,
+  ReportsPage,
+  PdfViewerPage,
 } from './pages/index.ts'
 import { doctors, exams, initialAttachments, patients } from './data/mockData.ts'
 import type { Attachment, User } from './types.ts'
@@ -39,6 +42,8 @@ function App() {
   }
 
   const handleLogout = () => setUser(null)
+
+  const handleUpdateUser = (updated: User) => setUser(updated)
 
   const handleUpload = (fileList: FileList | null, notes: string) => {
     if (!fileList || fileList.length === 0) return
@@ -91,6 +96,10 @@ function App() {
               }
             />
             <Route
+              path="exams/new"
+              element={<NewExamPage patients={memoPatients} />}
+            />
+            <Route
               path="exams/:id"
               element={
                 <ExamDetailPage
@@ -122,8 +131,9 @@ function App() {
               path="doctors/:id"
               element={<DoctorDetailPage doctors={memoDoctors} exams={memoExams} patients={memoPatients} />}
             />
-            <Route path="profile" element={<ProfilePage user={user} />} />
+            <Route path="profile" element={<ProfilePage user={user} onUpdateUser={handleUpdateUser} />} />
             <Route path="admin" element={<AdminPage />} />
+            <Route path="reports" element={<ReportsPage />} />
             <Route
               path="attachments"
               element={
@@ -136,6 +146,11 @@ function App() {
         </Route>
 
         <Route path="*" element={<Navigate to={user ? '/app' : '/'} replace />} />
+
+        {/* Visualizador PDF — fora do ShellLayout para ocupar tela cheia */}
+        <Route path="/pdf-viewer" element={<ProtectedRoute user={user} />}>
+          <Route index element={<PdfViewerPage />} />
+        </Route>
       </Routes>
     </div>
   )
