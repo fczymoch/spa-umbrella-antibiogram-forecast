@@ -1,7 +1,12 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Legend, Tooltip } from 'chart.js'
-import type { Attachment, Exam, Patient, User } from '../types.ts'
+import { getDashboard } from '../api/dashboard.ts'
+import { listExams } from '../api/exams.ts'
+import { useAuth } from '../hooks/useAuth.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import { statusClass } from '../utils/status.ts'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
@@ -88,12 +93,12 @@ function IconClock() {
 }
 // ─────────────────────────────────────────────────────────────
 
-/** Retorna string legível de tempo decorrido desde uma data 'YYYY-MM-DD HH:mm' */
+/** Retorna string legível de tempo decorrido desde uma data 'YYYY-MM-DD HH:mm' ou ISO. */
 function elapsedLabel(dateStr: string): string {
-  const [datePart, timePart] = dateStr.split(' ')
-  const [y, mo, d] = datePart.split('-').map(Number)
-  const [h, mi] = (timePart ?? '00:00').split(':').map(Number)
-  const then = new Date(y, mo - 1, d, h, mi)
+  if (!dateStr) return ''
+  const normalized = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T')
+  const then = new Date(normalized)
+  if (Number.isNaN(then.getTime())) return dateStr
   const diffMs = Date.now() - then.getTime()
   const diffH = Math.floor(diffMs / 3_600_000)
   if (diffH < 1) return 'há menos de 1h'
@@ -103,13 +108,6 @@ function elapsedLabel(dateStr: string): string {
   return `há ${diffD} dias`
 }
 
-interface HomePageProps {
-  user: User
-  attachments: Attachment[]
-  exams: Exam[]
-  patients: Patient[]
-}
-
 const STATUS_LEGEND = [
   { key: 'Finalizado',             color: '#22c55e', label: 'Finalizado'             },
   { key: 'Pendente de avaliação',  color: '#3b82f6', label: 'Pend. de avaliação'     },
@@ -117,27 +115,29 @@ const STATUS_LEGEND = [
   { key: 'Pendente',               color: '#6366f1', label: 'Pendente'               },
 ] as const
 
-export function HomePage({ user, attachments, exams, patients }: HomePageProps) {
-  const patientMap = useMemo(
-    () => patients.reduce<Record<string, string>>((acc, p) => { acc[p.id] = p.name; return acc }, {}),
-    [patients]
-  )
-  const statusSummary = useMemo(() => {
-    return exams.reduce(
-      (acc, exam) => {
-        acc[exam.status] = (acc[exam.status] || 0) + 1
-        return acc
-      },
-      {} as Record<Exam['status'], number>,
-    )
-  }, [exams])
+export function HomePage() {
+  const { user } = useAuth()
 
-  /** Últimos exames finalizados */
-  const recentDoneExams = useMemo(() => {
-    return exams
-      .filter((e) => e.status === 'Finalizado')
-      .slice(0, 6)
-  }, [exams])
+  // Endpoint agregado do backend: GET /v1/dashboard
+  const dashboardQuery = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: getDashboard,
+  })
+
+  // Lista curta dos exames mais recentes para os cards "Antibiogramas recentes"
+  // e "Em análise" da home (o /dashboard só traz Finalizados).
+  const recentExamsQuery = useQuery({
+    queryKey: ['exams', { page: 1, limit: 8 }],
+    queryFn: () => listExams({ page: 1, limit: 8 }),
+  })
+
+  const dashboard      = dashboardQuery.data
+  const recentExams    = recentExamsQuery.data?.data ?? []
+  const statusSummary  = dashboard?.exams.byStatus ?? {}
+  const totalExams     = dashboard?.exams.total ?? 0
+  const totalAttach    = dashboard?.attachments.total ?? 0
+  const recentAttach   = dashboard?.attachments.recent ?? []
+  const recentDone     = dashboard?.exams.recentFinalized ?? []
 
   const chartData = useMemo(() => {
     const labels = STATUS_LEGEND.map((s) => s.key)
@@ -155,12 +155,38 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
   }, [statusSummary])
 
   const chartOptions = useMemo(() => ({
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true },
-    },
+    plugins: { legend: { display: false }, tooltip: { enabled: true } },
     cutout: '68%',
   }), [])
+
+  if (dashboardQuery.isLoading) {
+    return (
+      <div className="page" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (dashboardQuery.isError) {
+    return (
+      <div className="page">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Dashboard</p>
+            <h1>Painel de Antibiogramas</h1>
+          </div>
+        </div>
+        <section className="card">
+          <p className="muted">
+            Não foi possível carregar o dashboard. {extractErrorMessage(dashboardQuery.error)}
+          </p>
+          <button className="btn btn--primary" onClick={() => dashboardQuery.refetch()} style={{ marginTop: 'var(--space-3)' }}>
+            Tentar novamente
+          </button>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="page">
@@ -169,9 +195,11 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
         <div>
           <p className="eyebrow">Dashboard</p>
           <h1>Painel de Antibiogramas</h1>
-          <p className="muted">
-            Bem-vindo(a), <strong>{user.name}</strong> · Turno: {user.shift}
-          </p>
+          {user && (
+            <p className="muted">
+              Bem-vindo(a), <strong>{user.name}</strong> · Turno: {user.shift}
+            </p>
+          )}
         </div>
         <div className="badge soft">Resistência bacteriana</div>
       </div>
@@ -179,29 +207,23 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
       {/* ── Stat cards ─────────────────────────────────── */}
       <div className="stats-grid home-stats">
         <div className="stat stat--primary">
-          <div className="stat__icon stat__icon--primary">
-            <IconFlask />
-          </div>
+          <div className="stat__icon stat__icon--primary"><IconFlask /></div>
           <div className="stat__body">
             <p className="muted">Antibiogramas</p>
-            <p className="stat-value">{exams.length}</p>
+            <p className="stat-value">{totalExams}</p>
             <p className="muted small">Coletas monitoradas</p>
           </div>
         </div>
         <div className="stat stat--info">
-          <div className="stat__icon stat__icon--info">
-            <IconPaperclip />
-          </div>
+          <div className="stat__icon stat__icon--info"><IconPaperclip /></div>
           <div className="stat__body">
             <p className="muted">Anexos</p>
-            <p className="stat-value">{attachments.length}</p>
+            <p className="stat-value">{totalAttach}</p>
             <p className="muted small">Laudos e imagens</p>
           </div>
         </div>
         <div className="stat stat--accent">
-          <div className="stat__icon stat__icon--accent">
-            <IconCalendar />
-          </div>
+          <div className="stat__icon stat__icon--accent"><IconCalendar /></div>
           <div className="stat__body">
             <p className="muted">Finalizados</p>
             <p className="stat-value">{statusSummary['Finalizado'] || 0}</p>
@@ -209,9 +231,7 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
           </div>
         </div>
         <div className="stat stat--warn">
-          <div className="stat__icon stat__icon--warn">
-            <IconBug />
-          </div>
+          <div className="stat__icon stat__icon--warn"><IconBug /></div>
           <div className="stat__body">
             <p className="muted">Pendentes</p>
             <p className="stat-value">{statusSummary['Pendente'] || 0}</p>
@@ -275,23 +295,21 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
         <section className="card">
           <div className="card-header">
             <h3>Últimos exames finalizados</h3>
-            <span className="pill subtle">{recentDoneExams.length} finalizados</span>
+            <span className="pill subtle">{recentDone.length} finalizados</span>
           </div>
           <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
             Antibiogramas com laudo finalizado mais recentemente.
           </p>
-          {recentDoneExams.length === 0 ? (
+          {recentDone.length === 0 ? (
             <p className="muted small">Nenhum exame finalizado ainda.</p>
           ) : (
             <ul className="list">
-              {recentDoneExams.map((exam) => (
+              {recentDone.map((exam) => (
                 <li key={exam.id} className="list-row">
-                  <div className="list-row__icon">
-                    <IconFlask />
-                  </div>
+                  <div className="list-row__icon"><IconFlask /></div>
                   <div style={{ flex: 1 }}>
-                    <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
-                    <p className="muted small">{exam.organism} · {exam.specimen}</p>
+                    <p className="list-title">{exam.patientName}</p>
+                    <p className="muted small">{exam.organism}</p>
                   </div>
                   <div className="list-meta">
                     <span className="pill status ok">Finalizado</span>
@@ -316,7 +334,7 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
           <ul className="home-chart-legend">
             {STATUS_LEGEND.map((s) => {
               const count = statusSummary[s.key] || 0
-              const pct = exams.length > 0 ? Math.round((count / exams.length) * 100) : 0
+              const pct = totalExams > 0 ? Math.round((count / totalExams) * 100) : 0
               return (
                 <li key={s.key} className="home-chart-legend__item">
                   <div className="home-chart-legend__row">
@@ -336,7 +354,7 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
             <li style={{ paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-border)' }}>
               <p className="muted small">Total de exames monitorados</p>
               <p style={{ fontSize: 'var(--font-size-2xl)', fontWeight: 'var(--font-weight-bold)', margin: '2px 0 0', color: 'var(--color-text)' }}>
-                {exams.length}
+                {totalExams}
               </p>
             </li>
           </ul>
@@ -351,27 +369,29 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
             <h3>Antibiogramas recentes</h3>
             <span className="pill subtle">Monitoramento</span>
           </div>
-          <ul className="list">
-            {exams.slice(0, 4).map((exam) => (
-              <li key={exam.id} className="list-row">
-                <div className="list-row__icon">
-                  <IconFlask />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
-                  <p className="muted small">{exam.organism} · {exam.specimen}</p>
-                  {(exam.status === 'Em análise' || exam.status === 'Pendente') && (
-                    <p className="muted small" style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <IconClock /> {elapsedLabel(exam.collectedAt)}
-                    </p>
-                  )}
-                </div>
-                <div className="list-meta">
-                  <span className={`pill status ${statusClass(exam.status)}`}>{exam.status}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {recentExams.length === 0 ? (
+            <p className="muted small">Nenhum antibiograma cadastrado.</p>
+          ) : (
+            <ul className="list">
+              {recentExams.slice(0, 4).map((exam) => (
+                <li key={exam.id} className="list-row">
+                  <div className="list-row__icon"><IconFlask /></div>
+                  <div style={{ flex: 1 }}>
+                    <p className="list-title">{exam.patientName ?? '—'}</p>
+                    <p className="muted small">{exam.organism} · {exam.specimen}</p>
+                    {(exam.status === 'Em análise' || exam.status === 'Pendente') && (
+                      <p className="muted small" style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <IconClock /> {elapsedLabel(exam.collectedAt)}
+                      </p>
+                    )}
+                  </div>
+                  <div className="list-meta">
+                    <span className={`pill status ${statusClass(exam.status)}`}>{exam.status}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* Em análise */}
@@ -381,15 +401,13 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
             <span className="pill subtle">Em processamento</span>
           </div>
           <ul className="list">
-            {exams.filter(e => e.status === 'Em análise').length === 0 ? (
+            {recentExams.filter((e) => e.status === 'Em análise').length === 0 ? (
               <li className="list-row"><p className="muted small">Nenhum exame em análise no momento.</p></li>
-            ) : exams.filter(e => e.status === 'Em análise').map((exam) => (
+            ) : recentExams.filter((e) => e.status === 'Em análise').map((exam) => (
               <li key={exam.id} className="list-row">
-                <div className="list-row__icon">
-                  <IconFlask />
-                </div>
+                <div className="list-row__icon"><IconFlask /></div>
                 <div style={{ flex: 1 }}>
-                  <p className="list-title">{patientMap[exam.patientId] ?? '—'}</p>
+                  <p className="list-title">{exam.patientName ?? '—'}</p>
                   <p className="muted small">{exam.organism} · {exam.specimen}</p>
                 </div>
                 <div className="list-meta">
@@ -409,25 +427,25 @@ export function HomePage({ user, attachments, exams, patients }: HomePageProps) 
             <h3>Últimos anexos</h3>
             <span className="pill subtle">Uploads</span>
           </div>
-          <ul className="list">
-            {attachments.slice(0, 5).map((item) => (
-              <li key={item.id} className="list-row">
-                <div className="list-row__icon list-row__icon--file">
-                  <IconFile />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <p className="list-title">{item.fileName}</p>
-                  <p className="muted small">{item.notes || item.type}</p>
-                </div>
-                <div className="list-meta">
-                  <span className="muted list-meta__source">
-                    <IconClock /> {item.uploadedAt}
-                  </span>
-                  <span className="pill subtle">{item.size}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {recentAttach.length === 0 ? (
+            <p className="muted small">Nenhum anexo enviado ainda.</p>
+          ) : (
+            <ul className="list">
+              {recentAttach.slice(0, 5).map((item) => (
+                <li key={item.id} className="list-row">
+                  <div className="list-row__icon list-row__icon--file"><IconFile /></div>
+                  <div style={{ flex: 1 }}>
+                    <p className="list-title">{item.fileName}</p>
+                  </div>
+                  <div className="list-meta">
+                    <span className="muted list-meta__source">
+                      <IconClock /> {item.uploadedAt}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>

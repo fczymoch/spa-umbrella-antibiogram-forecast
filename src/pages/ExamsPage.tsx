@@ -1,15 +1,15 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import type { Doctor, Exam, Patient, User } from '../types.ts'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { listExams, type ListExamsParams } from '../api/exams.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import { statusClass } from '../utils/status.ts'
-interface ExamsPageProps {
-  exams: Exam[]
-  patients: Patient[]
-  doctors: Doctor[]
-  user: User | null
-}
 
-export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
+const ITEMS_PER_PAGE = 10
+const KNOWN_STATUSES = ['Pendente', 'Em análise', 'Pendente de avaliação', 'Finalizado']
+
+export function ExamsPage() {
   const [searchParams] = useSearchParams()
   const viewParam = searchParams.get('view') === 'mine' ? 'mine' : 'all'
   const [patientSearch, setPatientSearch] = useState('')
@@ -18,19 +18,31 @@ export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
 
-  const getPatient = useCallback(
-    (id: string) => patients.find((p) => p.id === id)?.name || 'Paciente',
-    [patients],
-  )
-  const getDoctor = useCallback(
-    (id: string) => doctors.find((d) => d.id === id)?.name || 'Médico',
-    [doctors],
-  )
+  // Monta os params de forma estável para a queryKey
+  const params = useMemo<ListExamsParams>(() => ({
+    view: viewParam,
+    patientName: patientSearch.trim() || undefined,
+    doctorName: doctorSearch.trim() || undefined,
+    status: statusFilter.length > 0 ? statusFilter : undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+    page: currentPage,
+    limit: ITEMS_PER_PAGE,
+  }), [viewParam, patientSearch, doctorSearch, statusFilter, dateFrom, dateTo, currentPage])
+
+  const examsQuery = useQuery({
+    queryKey: ['exams', params],
+    queryFn: () => listExams(params),
+    placeholderData: keepPreviousData,
+  })
+
+  const exams = examsQuery.data?.data ?? []
+  const total = examsQuery.data?.total ?? 0
+  const totalPages = Math.max(1, Math.ceil(total / ITEMS_PER_PAGE))
 
   const parseCollectedAt = useCallback((value: string) => {
-    const normalized = value.replace(' ', 'T')
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T')
     const date = new Date(normalized)
     return Number.isNaN(date.getTime()) ? null : date
   }, [])
@@ -55,53 +67,6 @@ export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleDateString('pt-BR')
   }, [])
-
-  const availableStatuses = useMemo<string[]>(
-    () => Array.from(new Set(exams.map((exam) => exam.status))).sort(),
-    [exams],
-  )
-
-  const filteredExams = useMemo(() => {
-    let data = [...exams]
-    if (viewParam === 'mine' && user?.doctorId) {
-      data = data.filter((exam) => exam.doctorId === user.doctorId)
-    }
-    if (statusFilter.length) {
-      data = data.filter((exam) => statusFilter.includes(exam.status))
-    }
-    if (dateFrom) {
-      const from = new Date(`${dateFrom}T00:00:00`)
-      data = data.filter((exam) => {
-        const collected = parseCollectedAt(exam.collectedAt)
-        return collected && collected >= from
-      })
-    }
-    if (dateTo) {
-      const to = new Date(`${dateTo}T23:59:59.999`)
-      data = data.filter((exam) => {
-        const collected = parseCollectedAt(exam.collectedAt)
-        return collected && collected <= to
-      })
-    }
-    if (patientSearch.trim()) {
-      const term = patientSearch.toLowerCase()
-      data = data.filter((exam) => getPatient(exam.patientId).toLowerCase().includes(term))
-    }
-    if (doctorSearch.trim()) {
-      const term = doctorSearch.toLowerCase()
-      data = data.filter((exam) => getDoctor(exam.doctorId).toLowerCase().includes(term))
-    }
-    return data.sort((a, b) => {
-      const da = parseCollectedAt(a.collectedAt)
-      const db = parseCollectedAt(b.collectedAt)
-      if (!da || !db) return 0
-      return db.getTime() - da.getTime()
-    })
-  }, [dateFrom, dateTo, doctorSearch, exams, getDoctor, getPatient, parseCollectedAt, patientSearch, statusFilter, user, viewParam])
-
-  const totalPages = Math.ceil(filteredExams.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedExams = filteredExams.slice(startIndex, startIndex + itemsPerPage)
 
   const resetPage = () => setCurrentPage(1)
   const hasActiveFilters = statusFilter.length > 0 || dateFrom || dateTo || patientSearch || doctorSearch
@@ -128,7 +93,7 @@ export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
         <div className="filter-row">
           <span className="filter-label">Status:</span>
           <div className="filter-status-buttons">
-            {availableStatuses.map((status) => (
+            {KNOWN_STATUSES.map((status) => (
               <button
                 key={status}
                 type="button"
@@ -236,26 +201,37 @@ export function ExamsPage({ exams, patients, doctors, user }: ExamsPageProps) {
         <div className="card-header">
           <h3>Lista de antibiogramas</h3>
           <div className="chips">
-            <span className="pill subtle" role="status" aria-live="polite">{filteredExams.length} registros</span>
+            <span className="pill subtle" role="status" aria-live="polite">{total} registros</span>
             {totalPages > 1 && (
               <span className="muted small">Página {currentPage} de {totalPages}</span>
             )}
           </div>
         </div>
 
-        {paginatedExams.length === 0 ? (
+        {examsQuery.isLoading ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+            <Spinner size="lg" />
+          </div>
+        ) : examsQuery.isError ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+            <p className="muted">Erro ao carregar antibiogramas: {extractErrorMessage(examsQuery.error)}</p>
+            <button className="btn btn--primary" onClick={() => examsQuery.refetch()} style={{ marginTop: 'var(--space-3)' }}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : exams.length === 0 ? (
           <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
             <p className="muted">Nenhum antibiograma encontrado para os filtros selecionados.</p>
           </div>
         ) : (
           <ul className="list">
-            {paginatedExams.map((exam) => (
+            {exams.map((exam) => (
               <li key={exam.id} className="list-row">
                 <div>
                   <p className="list-title">{exam.organism}</p>
                   <p className="muted small">{exam.specimen} • {exam.site}</p>
                   <p className="muted small">
-                    Paciente: {getPatient(exam.patientId)} • Médico: {getDoctor(exam.doctorId)}
+                    Paciente: {exam.patientName ?? 'Paciente'} • Médico: {exam.doctorName ?? 'Médico'}
                   </p>
                 </div>
                 <div className="list-meta">

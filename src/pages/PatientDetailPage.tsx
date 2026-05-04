@@ -1,29 +1,36 @@
 import { Link, useParams } from 'react-router-dom'
-import type { Doctor, Exam, Patient } from '../types.ts'
+import { useQuery } from '@tanstack/react-query'
+import { getPatient } from '../api/patients.ts'
+import { listExams } from '../api/exams.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import { statusClass } from '../utils/status.ts'
 
-interface PatientDetailPageProps {
-  patients: Patient[]
-  exams: Exam[]
-  doctors: Doctor[]
-}
-
-export function PatientDetailPage({ patients, exams, doctors }: PatientDetailPageProps) {
+export function PatientDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const patient = patients.find((p) => p.id === id)
 
-  const patientExams = exams
-    .filter((ex) => ex.patientId === id)
-    .sort(
-      (a, b) =>
-        new Date(b.collectedAt.replace(' ', 'T')).getTime() -
-        new Date(a.collectedAt.replace(' ', 'T')).getTime(),
-    )
+  const patientQuery = useQuery({
+    queryKey: ['patient', id],
+    queryFn: () => getPatient(id!),
+    enabled: Boolean(id),
+  })
 
-  const getDoctor = (doctorId: string) => doctors.find((d) => d.id === doctorId)?.name || 'Médico'
+  const examsQuery = useQuery({
+    queryKey: ['exams', { patientId: id }],
+    queryFn: () => listExams({ patientId: id, limit: 100 }),
+    enabled: Boolean(id),
+  })
+
+  const patient = patientQuery.data
+  const patientExams = (examsQuery.data?.data ?? []).slice().sort(
+    (a, b) =>
+      new Date((b.collectedAt || '').replace(' ', 'T')).getTime() -
+      new Date((a.collectedAt || '').replace(' ', 'T')).getTime(),
+  )
 
   const formatDateTime = (value: string) => {
-    const date = new Date(value.replace(' ', 'T'))
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+    const date = new Date(normalized)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
@@ -34,13 +41,24 @@ export function PatientDetailPage({ patients, exams, doctors }: PatientDetailPag
     })
   }
 
-  if (!patient) {
+  if (patientQuery.isLoading) {
+    return (
+      <div className="page" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (patientQuery.isError || !patient) {
     return (
       <div className="page">
         <div className="page-header">
           <h1>Paciente não encontrado</h1>
         </div>
-        <Link className="pill subtle" to="/patients">
+        <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+          {patientQuery.error ? extractErrorMessage(patientQuery.error) : 'Não foi possível carregar os dados do paciente.'}
+        </p>
+        <Link className="pill subtle" to="/app/patients">
           ← Voltar para pacientes
         </Link>
       </div>
@@ -51,7 +69,7 @@ export function PatientDetailPage({ patients, exams, doctors }: PatientDetailPag
     <div className="page">
       <div className="page-header">
         <div>
-          <Link className="pill subtle" to="/patients" style={{ marginBottom: 'var(--space-2)', display: 'inline-block' }}>
+          <Link className="pill subtle" to="/app/patients" style={{ marginBottom: 'var(--space-2)', display: 'inline-block' }}>
             ← Voltar para pacientes
           </Link>
           <p className="muted">Detalhes do paciente</p>
@@ -70,7 +88,11 @@ export function PatientDetailPage({ patients, exams, doctors }: PatientDetailPag
         <div className="card-header">
           <h3>Antibiogramas do paciente</h3>
         </div>
-        {patientExams.length === 0 ? (
+        {examsQuery.isLoading ? (
+          <div style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
+            <Spinner />
+          </div>
+        ) : patientExams.length === 0 ? (
           <p className="muted" style={{ padding: 'var(--space-4)' }}>
             Nenhum antibiograma registrado para este paciente.
           </p>
@@ -84,7 +106,7 @@ export function PatientDetailPage({ patients, exams, doctors }: PatientDetailPag
                     {exam.specimen} • {exam.site}
                   </p>
                   <p className="muted small">Coletado: {formatDateTime(exam.collectedAt)}</p>
-                  <p className="muted small">Médico solicitante: {getDoctor(exam.doctorId)}</p>
+                  <p className="muted small">Médico solicitante: {exam.doctorName ?? 'Médico'}</p>
                   {exam.notes && (
                     <p className="muted small" style={{ marginTop: 'var(--space-1)', fontStyle: 'italic' }}>
                       Observações: {exam.notes}

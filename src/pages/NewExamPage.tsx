@@ -1,21 +1,38 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { listPatients } from '../api/patients.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
+import { useToast } from '../contexts/useToast.ts'
 import type { Patient } from '../types.ts'
 
-interface NewExamPageProps { patients: Patient[] }
 type Step = 'select' | 'running' | 'done'
 interface TerminalLine { text: string; type: string }
 interface ImageItem    { label: string; url: string }
 interface ImageGroup   { name: string; images: ImageItem[] }
 interface ImagesResult { groups: ImageGroup[]; flat: ImageItem[] }
 
-const SERVER_URL = 'http://localhost:3333'
+// Servidor Express local que executa o script Python via SSE.
+// Mantido separado do backend Spring porque o script vive no host onde o
+// usuário roda o front (e o backend pode estar em outra máquina).
+const SCRIPT_SERVER_URL = (import.meta.env.VITE_SCRIPT_SERVER_URL as string | undefined) ?? 'http://localhost:3333'
+
 const is75px = (img: ImageItem) => img.label.includes('75px') || img.url.includes('75px')
 const riskClass = (risk: string) =>
   risk === 'Vermelho' ? 'alert' : risk === 'Amarelo' ? 'warn' : 'ok'
 
-export function NewExamPage({ patients }: NewExamPageProps) {
+export function NewExamPage() {
   const navigate = useNavigate()
+  const toast = useToast()
+
+  // Carrega pacientes do backend para o seletor inicial
+  const patientsQuery = useQuery({
+    queryKey: ['patients', { limit: 200, page: 1 }],
+    queryFn: () => listPatients({ page: 1, limit: 200 }),
+  })
+  const patients: Patient[] = patientsQuery.data?.data ?? []
+
   const [step, setStep]         = useState<Step>('select')
   const [query, setQuery]       = useState('')
   const [patient, setPatient]   = useState<Patient | null>(null)
@@ -25,6 +42,9 @@ export function NewExamPage({ patients }: NewExamPageProps) {
   const [lightbox, setLightbox] = useState<string | null>(null)
   const terminalRef             = useRef<HTMLDivElement>(null)
   const esRef                   = useRef<EventSource | null>(null)
+
+  // Limpa o EventSource ao desmontar
+  useEffect(() => () => esRef.current?.close(), [])
 
   const filtered = patients.filter(p =>
     p.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -48,25 +68,29 @@ export function NewExamPage({ patients }: NewExamPageProps) {
   const startExam = (p: Patient) => {
     setPatient(p); setLines([]); setImages(null)
     esRef.current?.close()
-    const es = new EventSource(`${SERVER_URL}/api/run`)
+    const es = new EventSource(`${SCRIPT_SERVER_URL}/api/run`)
     esRef.current = es
     setStep('running')
 
     es.onmessage = (e) => {
-      const data = JSON.parse(e.data) as { type: string; text: string }
-      if (data.type === 'exit') {
-        es.close()
-        fetch(`${SERVER_URL}/api/images`)
-          .then(r => r.json())
-          .then((res: ImagesResult) => { setImages(res); setStep('done') })
-          .catch(() => setStep('done'))
-        return
+      try {
+        const data = JSON.parse(e.data) as { type: string; text: string }
+        if (data.type === 'exit') {
+          es.close()
+          fetch(`${SCRIPT_SERVER_URL}/api/images`)
+            .then(r => r.json())
+            .then((res: ImagesResult) => { setImages(res); setStep('done') })
+            .catch(() => setStep('done'))
+          return
+        }
+        pushLine(data)
+      } catch {
+        pushLine({ type: 'stderr', text: e.data })
       }
-      pushLine(data)
     }
 
     es.onerror = () => {
-      pushLine({ type: 'error', text: '[ERRO] Não foi possível conectar ao servidor. Verifique se "npm run server" está rodando.' })
+      pushLine({ type: 'error', text: '[ERRO] Não foi possível conectar ao servidor de scripts. Verifique se "npm run server" está rodando em ' + SCRIPT_SERVER_URL })
       es.close(); setStep('done')
     }
   }
@@ -136,32 +160,50 @@ export function NewExamPage({ patients }: NewExamPageProps) {
               onChange={e => setQuery(e.target.value)} />
           </div>
 
-          {query.trim() && filtered.length === 0 && (
-            <p className="muted small" style={{ marginTop: 'var(--space-3)' }}>
-              Nenhum resultado para "{query}".
-            </p>
-          )}
+          {patientsQuery.isLoading ? (
+            <div style={{ padding: 'var(--space-6)', textAlign: 'center' }}>
+              <Spinner />
+            </div>
+          ) : patientsQuery.isError ? (
+            <div style={{ padding: 'var(--space-4)' }}>
+              <p className="muted">Erro ao carregar pacientes: {extractErrorMessage(patientsQuery.error)}</p>
+              <button className="btn btn--primary" onClick={() => patientsQuery.refetch()} style={{ marginTop: 'var(--space-3)' }}>
+                Tentar novamente
+              </button>
+            </div>
+          ) : (
+            <>
+              {query.trim() && filtered.length === 0 && (
+                <p className="muted small" style={{ marginTop: 'var(--space-3)' }}>
+                  Nenhum resultado para "{query}".
+                </p>
+              )}
 
-          <ul className="new-exam-patient-list">
-            {(query.trim() ? filtered : patients).map(p => (
-              <li key={p.id}>
-                <button type="button" className="new-exam-patient-btn" onClick={() => startExam(p)}>
-                  <span className="new-exam-patient-avatar">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                    </svg>
-                  </span>
-                  <span className="new-exam-patient-info">
-                    <span className="new-exam-patient-name">{p.name}</span>
-                    <span className="new-exam-patient-meta">Leito: {p.bed} · {p.age} anos</span>
-                  </span>
-                  <span className={`pill status ${riskClass(p.risk)}`}>{p.risk}</span>
-                  <span className="new-exam-patient-arrow">→</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+              <ul className="new-exam-patient-list">
+                {(query.trim() ? filtered : patients).map(p => (
+                  <li key={p.id}>
+                    <button type="button" className="new-exam-patient-btn" onClick={() => {
+                      startExam(p)
+                      toast(`Iniciando análise para ${p.name}…`, 'info')
+                    }}>
+                      <span className="new-exam-patient-avatar">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                        </svg>
+                      </span>
+                      <span className="new-exam-patient-info">
+                        <span className="new-exam-patient-name">{p.name}</span>
+                        <span className="new-exam-patient-meta">Leito: {p.bed} · {p.age} anos</span>
+                      </span>
+                      <span className={`pill status ${riskClass(p.risk)}`}>{p.risk}</span>
+                      <span className="new-exam-patient-arrow">→</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
 
@@ -230,8 +272,8 @@ export function NewExamPage({ patients }: NewExamPageProps) {
                   <div className="results-gallery">
                     {group.images.map(img => (
                       <button key={img.url} type="button" className="results-gallery__item"
-                        onClick={() => setLightbox(`${SERVER_URL}${img.url}`)} title={img.label}>
-                        <img src={`${SERVER_URL}${img.url}`} alt={img.label} className="results-gallery__img" />
+                        onClick={() => setLightbox(`${SCRIPT_SERVER_URL}${img.url}`)} title={img.label}>
+                        <img src={`${SCRIPT_SERVER_URL}${img.url}`} alt={img.label} className="results-gallery__img" />
                         <span className="results-gallery__label">{img.label}</span>
                       </button>
                     ))}

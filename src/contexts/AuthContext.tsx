@@ -12,14 +12,9 @@ import type { User } from '../types'
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
-interface AuthUser extends User {
-  id: string
-  status: string
-}
-
 interface AuthContextValue {
   /** Usuário autenticado ou null se não logado */
-  user: AuthUser | null
+  user: User | null
   /** Token JWT atual */
   token: string | null
   /** true enquanto restaura sessão do localStorage na inicialização */
@@ -29,7 +24,7 @@ interface AuthContextValue {
   /** Encerra a sessão */
   logout: () => Promise<void>
   /** Atualiza dados do usuário localmente (após PATCH /users/me) */
-  updateUser: (updated: Partial<AuthUser>) => void
+  updateUser: (updated: Partial<User>) => void
 }
 
 // ── Contexto ─────────────────────────────────────────────────────────────────
@@ -38,14 +33,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 // ── Chaves localStorage ───────────────────────────────────────────────────────
 
-const TOKEN_KEY = 'biolab:token'
-const USER_KEY  = 'biolab:user'
+const TOKEN_KEY   = 'biolab:token'
+const REFRESH_KEY = 'biolab:refresh'
+const USER_KEY    = 'biolab:user'
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken]     = useState<string | null>(null)
-  const [user, setUser]       = useState<AuthUser | null>(null)
+  const [token, setToken]         = useState<string | null>(null)
+  const [user, setUser]           = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   // Restaura sessão salva no localStorage ao montar
@@ -55,11 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const savedUser  = localStorage.getItem(USER_KEY)
       if (savedToken && savedUser) {
         setToken(savedToken)
-        setUser(JSON.parse(savedUser) as AuthUser)
+        setUser(JSON.parse(savedUser) as User)
       }
     } catch {
       // localStorage corrompido — ignora
       localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(REFRESH_KEY)
       localStorage.removeItem(USER_KEY)
     } finally {
       setIsLoading(false)
@@ -69,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (credentials: LoginRequest) => {
     const response = await apiLogin(credentials)
     localStorage.setItem(TOKEN_KEY, response.token)
+    if (response.refreshToken) {
+      localStorage.setItem(REFRESH_KEY, response.refreshToken)
+    }
     localStorage.setItem(USER_KEY, JSON.stringify(response.user))
     setToken(response.token)
     setUser(response.user)
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const updateUser = useCallback((updated: Partial<AuthUser>) => {
+  const updateUser = useCallback((updated: Partial<User>) => {
     setUser((prev) => {
       if (!prev) return prev
       const next = { ...prev, ...updated }

@@ -1,29 +1,36 @@
 import { Link, useParams } from 'react-router-dom'
-import type { Doctor, Exam, Patient } from '../types.ts'
+import { useQuery } from '@tanstack/react-query'
+import { getDoctor } from '../api/doctors.ts'
+import { listExams } from '../api/exams.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import { statusClass } from '../utils/status.ts'
 
-interface DoctorDetailPageProps {
-  doctors: Doctor[]
-  exams: Exam[]
-  patients: Patient[]
-}
-
-export function DoctorDetailPage({ doctors, exams, patients }: DoctorDetailPageProps) {
+export function DoctorDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const doctor = doctors.find((d) => d.id === id)
-  const doctorExams = exams
-    .filter((e) => e.doctorId === id)
-    .sort(
-      (a, b) =>
-        new Date(b.collectedAt.replace(' ', 'T')).getTime() -
-        new Date(a.collectedAt.replace(' ', 'T')).getTime(),
-    )
 
-  const getPatient = (patientId: string) =>
-    patients.find((p) => p.id === patientId)
+  const doctorQuery = useQuery({
+    queryKey: ['doctor', id],
+    queryFn: () => getDoctor(id!),
+    enabled: Boolean(id),
+  })
+
+  const examsQuery = useQuery({
+    queryKey: ['exams', { doctorId: id }],
+    queryFn: () => listExams({ doctorId: id, limit: 100 }),
+    enabled: Boolean(id),
+  })
+
+  const doctor = doctorQuery.data
+  const doctorExams = (examsQuery.data?.data ?? []).slice().sort(
+    (a, b) =>
+      new Date((b.collectedAt || '').replace(' ', 'T')).getTime() -
+      new Date((a.collectedAt || '').replace(' ', 'T')).getTime(),
+  )
 
   const formatDateTime = (value: string) => {
-    const date = new Date(value.replace(' ', 'T'))
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+    const date = new Date(normalized)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString('pt-BR', {
       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -36,10 +43,21 @@ export function DoctorDetailPage({ doctors, exams, patients }: DoctorDetailPageP
     {} as Record<string, number>,
   )
 
-  if (!doctor) {
+  if (doctorQuery.isLoading) {
+    return (
+      <div className="page" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (doctorQuery.isError || !doctor) {
     return (
       <div className="page">
         <div className="page-header"><h1>Médico não encontrado</h1></div>
+        <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+          {doctorQuery.error ? extractErrorMessage(doctorQuery.error) : 'Não foi possível carregar os dados do médico.'}
+        </p>
         <Link className="pill subtle" to="/app/doctors">← Voltar para equipe</Link>
       </div>
     )
@@ -88,7 +106,11 @@ export function DoctorDetailPage({ doctors, exams, patients }: DoctorDetailPageP
           <h3>Antibiogramas solicitados</h3>
           <span className="pill subtle">{doctorExams.length} exame{doctorExams.length !== 1 ? 's' : ''}</span>
         </div>
-        {doctorExams.length === 0 ? (
+        {examsQuery.isLoading ? (
+          <div style={{ padding: 'var(--space-4)', textAlign: 'center' }}>
+            <Spinner />
+          </div>
+        ) : doctorExams.length === 0 ? (
           <div className="empty-state">
             <span className="empty-state-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -100,27 +122,24 @@ export function DoctorDetailPage({ doctors, exams, patients }: DoctorDetailPageP
           </div>
         ) : (
           <ul className="list">
-            {doctorExams.map((exam) => {
-              const patient = getPatient(exam.patientId)
-              return (
-                <li key={exam.id} className="list-row">
-                  <div>
-                    <p className="list-title">{exam.organism}</p>
-                    <p className="muted small">
-                      {patient?.name ?? 'Paciente'} · {exam.specimen} · {exam.site}
-                    </p>
-                    <p className="muted small">Coletado: {formatDateTime(exam.collectedAt)}</p>
-                  </div>
-                  <div className="list-meta">
-                    <span className={`pill status ${statusClass(exam.status)}`}>{exam.status}</span>
-                    <span className="pill subtle">{exam.source}</span>
-                    <Link className="pill subtle" to={`/app/exams/${exam.id}`}>
-                      Ver antibiograma →
-                    </Link>
-                  </div>
-                </li>
-              )
-            })}
+            {doctorExams.map((exam) => (
+              <li key={exam.id} className="list-row">
+                <div>
+                  <p className="list-title">{exam.organism}</p>
+                  <p className="muted small">
+                    {exam.patientName ?? 'Paciente'} · {exam.specimen} · {exam.site}
+                  </p>
+                  <p className="muted small">Coletado: {formatDateTime(exam.collectedAt)}</p>
+                </div>
+                <div className="list-meta">
+                  <span className={`pill status ${statusClass(exam.status)}`}>{exam.status}</span>
+                  <span className="pill subtle">{exam.source}</span>
+                  <Link className="pill subtle" to={`/app/exams/${exam.id}`}>
+                    Ver antibiograma →
+                  </Link>
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </section>

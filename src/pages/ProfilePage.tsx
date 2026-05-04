@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { changePassword, getMe, updateMe } from '../api/users.ts'
+import { useAuth } from '../hooks/useAuth.ts'
+import { useToast } from '../contexts/useToast.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import type { User } from '../types.ts'
-
-interface ProfilePageProps {
-  user: User | null
-  onUpdateUser?: (updated: User) => void
-}
 
 const ROLES    = ['Coordenador Clínico', 'Infectologista', 'Intensivista', 'Microbiologista', 'Enfermeiro(a)', 'Residente']
 const SHIFTS   = ['07h – 19h', '12h – 20h', '19h – 07h', 'Plantão hoje • 12h', '08h – 16h']
@@ -13,35 +14,112 @@ function initials(name: string) {
   return name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
 }
 
-export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
+export function ProfilePage() {
+  const { updateUser } = useAuth()
+  const toast = useToast()
+  const queryClient = useQueryClient()
+
+  // Sempre busca a versão "fresh" do servidor — mais confiável que o user
+  // do AuthContext (que pode estar desatualizado se o backend mudou algo).
+  const meQuery = useQuery({
+    queryKey: ['me'],
+    queryFn: getMe,
+  })
+
   const [editing, setEditing]   = useState(false)
-  const [form, setForm]         = useState<User | null>(user)
-  const [saved, setSaved]       = useState(false)
+  const [form, setForm]         = useState<User | null>(null)
+  const [pwOpen, setPwOpen]     = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw]         = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
 
-  if (!user) return (
-    <div className="page">
-      <div className="page-header"><div><h1>Perfil</h1></div></div>
-      <section className="card"><p className="muted">Faça login para ver o perfil.</p></section>
-    </div>
-  )
+  // Sincroniza o formulário com a resposta do servidor
+  useEffect(() => {
+    if (meQuery.data) setForm(meQuery.data)
+  }, [meQuery.data])
 
-  const field = (key: keyof User) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm(prev => prev ? { ...prev, [key]: e.target.value } : prev)
+  const updateMutation = useMutation({
+    mutationFn: (payload: Partial<User>) => updateMe({
+      name:  payload.name,
+      email: payload.email,
+      role:  payload.role,
+      shift: payload.shift,
+    }),
+    onSuccess: (data) => {
+      toast('Perfil atualizado com sucesso.', 'success')
+      queryClient.setQueryData(['me'], data)
+      updateUser(data)
+      setEditing(false)
+    },
+    onError: (error) => {
+      toast(extractErrorMessage(error, 'Falha ao atualizar perfil'), 'error')
+    },
+  })
+
+  const passwordMutation = useMutation({
+    mutationFn: () => changePassword({ currentPassword: currentPw, newPassword: newPw }),
+    onSuccess: () => {
+      toast('Senha alterada com sucesso.', 'success')
+      setPwOpen(false); setCurrentPw(''); setNewPw(''); setConfirmPw('')
+    },
+    onError: (error) => {
+      toast(extractErrorMessage(error, 'Falha ao alterar senha'), 'error')
+    },
+  })
 
   const handleSave = () => {
-    if (!form || !onUpdateUser) return
-    onUpdateUser(form)
-    setSaved(true)
-    setEditing(false)
-    setTimeout(() => setSaved(false), 3000)
+    if (!form) return
+    updateMutation.mutate(form)
   }
 
   const handleCancel = () => {
-    setForm(user)
+    if (meQuery.data) setForm(meQuery.data)
     setEditing(false)
   }
 
-  const current = editing ? form! : user
+  const handleChangePassword = () => {
+    if (!currentPw || !newPw) {
+      toast('Preencha senha atual e nova.', 'warning')
+      return
+    }
+    if (newPw.length < 6) {
+      toast('A nova senha deve ter no mínimo 6 caracteres.', 'warning')
+      return
+    }
+    if (newPw !== confirmPw) {
+      toast('Confirmação da nova senha não confere.', 'warning')
+      return
+    }
+    passwordMutation.mutate()
+  }
+
+  if (meQuery.isLoading) {
+    return (
+      <div className="page" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (meQuery.isError || !meQuery.data) {
+    return (
+      <div className="page">
+        <div className="page-header"><div><h1>Perfil</h1></div></div>
+        <section className="card">
+          <p className="muted">Não foi possível carregar o perfil. {extractErrorMessage(meQuery.error)}</p>
+          <button className="btn btn--primary" onClick={() => meQuery.refetch()} style={{ marginTop: 'var(--space-3)' }}>
+            Tentar novamente
+          </button>
+        </section>
+      </div>
+    )
+  }
+
+  const user = meQuery.data
+  const current = (editing && form) ? form : user
+
+  const field = (key: keyof User) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm((prev) => (prev ? { ...prev, [key]: e.target.value } : prev))
 
   return (
     <div className="page">
@@ -56,12 +134,6 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
           </button>
         )}
       </div>
-
-      {saved && (
-        <div className="profile-toast">
-          ✓ Perfil atualizado com sucesso.
-        </div>
-      )}
 
       {/* Avatar + identidade */}
       <section className="card profile-hero">
@@ -109,6 +181,7 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
             {editing
               ? (
                 <select className="profile-field__input" value={current.role} onChange={field('role')}>
+                  {!ROLES.includes(current.role) && <option value={current.role}>{current.role}</option>}
                   {ROLES.map(r => <option key={r}>{r}</option>)}
                 </select>
               )
@@ -122,6 +195,7 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
             {editing
               ? (
                 <select className="profile-field__input" value={current.shift} onChange={field('shift')}>
+                  {!SHIFTS.includes(current.shift) && <option value={current.shift}>{current.shift}</option>}
                   {SHIFTS.map(s => <option key={s}>{s}</option>)}
                 </select>
               )
@@ -132,8 +206,17 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
 
         {editing && (
           <div className="profile-actions">
-            <button type="button" className="btn btn--primary" onClick={handleSave}>Salvar alterações</button>
-            <button type="button" className="ghost" onClick={handleCancel}>Cancelar</button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={handleSave}
+              disabled={updateMutation.isPending}
+            >
+              {updateMutation.isPending ? 'Salvando…' : 'Salvar alterações'}
+            </button>
+            <button type="button" className="ghost" onClick={handleCancel} disabled={updateMutation.isPending}>
+              Cancelar
+            </button>
           </div>
         )}
       </section>
@@ -145,12 +228,66 @@ export function ProfilePage({ user, onUpdateUser }: ProfilePageProps) {
         </div>
         <div className="profile-fields">
           <div className="profile-field">
-            <label className="profile-field__label">Último acesso</label>
-            <p className="profile-field__value">Hoje • {new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</p>
+            <label className="profile-field__label">Status</label>
+            <p className="profile-field__value">
+              {user.status ?? 'Ativo'}
+              <span className="pill status ok" style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>JWT</span>
+            </p>
           </div>
           <div className="profile-field">
-            <label className="profile-field__label">Autenticação</label>
-            <p className="profile-field__value">E-mail + senha <span className="pill status ok" style={{ marginLeft: 'var(--space-2)', fontSize: 'var(--font-size-xs)' }}>Ativo</span></p>
+            <label className="profile-field__label">Senha</label>
+            {!pwOpen ? (
+              <button type="button" className="ghost small" onClick={() => setPwOpen(true)}>
+                Alterar senha
+              </button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <input
+                  type="password"
+                  className="profile-field__input"
+                  placeholder="Senha atual"
+                  value={currentPw}
+                  onChange={(e) => setCurrentPw(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <input
+                  type="password"
+                  className="profile-field__input"
+                  placeholder="Nova senha (mín. 6 caracteres)"
+                  value={newPw}
+                  onChange={(e) => setNewPw(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <input
+                  type="password"
+                  className="profile-field__input"
+                  placeholder="Confirme a nova senha"
+                  value={confirmPw}
+                  onChange={(e) => setConfirmPw(e.target.value)}
+                  autoComplete="new-password"
+                />
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <button
+                    type="button"
+                    className="btn btn--primary"
+                    onClick={handleChangePassword}
+                    disabled={passwordMutation.isPending}
+                  >
+                    {passwordMutation.isPending ? 'Alterando…' : 'Confirmar'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setPwOpen(false); setCurrentPw(''); setNewPw(''); setConfirmPw('')
+                    }}
+                    disabled={passwordMutation.isPending}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="profile-field">
             <label className="profile-field__label">2FA</label>

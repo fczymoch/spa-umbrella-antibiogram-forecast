@@ -10,12 +10,14 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string
+  refreshToken?: string
   expiresIn: number
-  user: User & { id: string; status: string }
+  user: User
 }
 
 export interface RefreshResponse {
   token: string
+  refreshToken?: string
   expiresIn: number
 }
 
@@ -34,8 +36,11 @@ export async function login(credentials: LoginRequest): Promise<LoginResponse> {
 export async function logout(): Promise<void> {
   try {
     await apiClient.post('/auth/logout')
+  } catch {
+    // Mesmo que o backend rejeite, limpamos a sessão local.
   } finally {
     localStorage.removeItem('biolab:token')
+    localStorage.removeItem('biolab:refresh')
     localStorage.removeItem('biolab:user')
   }
 }

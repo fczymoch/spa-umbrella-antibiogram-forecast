@@ -1,13 +1,8 @@
 import { useState, useEffect } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import type { User } from '../types.ts'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useLocalStorage } from '../hooks/useLocalStorage.ts'
+import { useAuth } from '../hooks/useAuth.ts'
 import { BiolabLogo } from './BiolabLogo.tsx'
-
-interface ShellLayoutProps {
-  user: User | null
-  onLogout: () => void
-}
 
 const PAGE_TITLES: Record<string, string> = {
   '/app': 'Início',
@@ -104,11 +99,18 @@ const IconMoon = () => (
   </svg>
 )
 
-export function ShellLayout({ user, onLogout }: ShellLayoutProps) {
+export function ShellLayout() {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [theme, setTheme] = useLocalStorage<'light' | 'dark'>('biolab:theme', 'light')
   const location = useLocation()
   const pageTitle = getPageTitle(location.pathname)
+
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -173,7 +175,7 @@ export function ShellLayout({ user, onLogout }: ShellLayoutProps) {
               <span>{user.role}</span>
             </div>
           </div>
-          <button className="nav-logout" onClick={onLogout}>
+          <button className="nav-logout" onClick={handleLogout}>
             <IconLogout /> Sair
           </button>
         </div>

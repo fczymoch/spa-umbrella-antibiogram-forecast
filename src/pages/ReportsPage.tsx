@@ -1,39 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { exams, patients, doctors } from '../data/mockData.ts'
-import { buildAntibiogramPDFBlob, generateAntibiogramPDF } from '../utils/generatePdf.ts'
-
-/* ── Types ─────────────────────────────────────────────────── */
-interface Report {
-  id: string
-  title: string
-  patientName: string
-  examId: string
-  generatedAt: string
-  status: 'ready' | 'generating' | 'error'
-  url?: string // preenchido pelo backend futuramente
-}
-
-/* ── Mock reports (simulando docs já gerados) ──────────────── */
-const MOCK_REPORTS: Report[] = exams.slice(0, 5).map((exam, i) => {
-  const patient = patients.find((p) => p.id === exam.patientId)
-  return {
-    id: `report-${exam.id}`,
-    title: `Relatório de Antibiograma — ${exam.organism}`,
-    patientName: patient?.name ?? 'Paciente desconhecido',
-    examId: exam.id,
-    generatedAt: new Date(Date.now() - i * 86_400_000).toLocaleString('pt-BR', {
-      dateStyle: 'short',
-      timeStyle: 'short',
-    }),
-    status: i === 4 ? 'error' : 'ready',
-    // URL gerada agora para os mocks já prontos (exceto o de erro)
-    url: i === 4 ? undefined : (() => {
-      const doctor = doctors.find((d) => d.id === exam.doctorId)
-      return buildAntibiogramPDFBlob(exam, patient, doctor)
-    })(),
-  }
-})
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { listExams, getExam } from '../api/exams.ts'
+import {
+  deleteReport,
+  generateReport,
+  getReport,
+  listReports,
+} from '../api/reports.ts'
+import { listPatients } from '../api/patients.ts'
+import { listDoctors } from '../api/doctors.ts'
+import {
+  buildAntibiogramPDFBlob,
+  generateAntibiogramPDF,
+} from '../utils/generatePdf.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { useToast } from '../contexts/useToast.ts'
+import { extractErrorMessage } from '../api/client.ts'
 
 /* ── Ícones ────────────────────────────────────────────────── */
 const IconPDF = () => (
@@ -76,82 +59,150 @@ const IconGenerate = () => (
   </svg>
 )
 
-/* ── Status badge ──────────────────────────────────────────── */
-function StatusBadge({ status }: { status: Report['status'] }) {
-  if (status === 'ready')
-    return <span className="badge badge--ok">Pronto</span>
-  if (status === 'generating')
-    return <span className="badge badge--warn">Gerando…</span>
+function StatusBadge({ status }: { status: 'ready' | 'generating' | 'pending' | 'error' }) {
+  if (status === 'ready')      return <span className="badge badge--ok">Pronto</span>
+  if (status === 'generating' || status === 'pending') return <span className="badge badge--warn">Gerando…</span>
   return <span className="badge badge--alert">Erro</span>
 }
 
-/* ── Componente principal ──────────────────────────────────── */
 export function ReportsPage() {
   const navigate = useNavigate()
-  const [reports, setReports] = useState<Report[]>(MOCK_REPORTS)
+  const toast = useToast()
+  const queryClient = useQueryClient()
   const [selectedExamId, setSelectedExamId] = useState('')
-  const [requesting, setRequesting] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
 
-  /* Quando o backend estiver pronto, substituir por fetch real */
-  const handleGenerate = async () => {
+  const reportsQuery = useQuery({
+    queryKey: ['reports', { page: 1, limit: 50 }],
+    queryFn: () => listReports({ page: 1, limit: 50 }),
+    refetchInterval: (query) => {
+      // Se há relatórios "generating", refetch em 3s
+      const data = query.state.data
+      const hasPending = data?.data.some((r) => r.status === 'generating' || r.status === 'pending')
+      return hasPending ? 3000 : false
+    },
+  })
+
+  const examsQuery = useQuery({
+    queryKey: ['exams', { page: 1, limit: 100 }],
+    queryFn: () => listExams({ page: 1, limit: 100 }),
+  })
+
+  const generateMutation = useMutation({
+    mutationFn: (examId: string) => generateReport(examId),
+    onSuccess: async (response) => {
+      toast('Relatório em geração…', 'info')
+      setSelectedExamId('')
+      // Otimização: invalida a lista para puxar o novo registro com status="generating"
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+
+      // Faz polling até ficar "ready" (max 60s)
+      const start = Date.now()
+      const pollDelay = 2000
+      while (Date.now() - start < 60_000) {
+        await new Promise((r) => setTimeout(r, pollDelay))
+        try {
+          const fresh = await getReport(response.reportId)
+          if (fresh.status === 'ready') {
+            toast('Relatório gerado com sucesso!', 'success')
+            queryClient.invalidateQueries({ queryKey: ['reports'] })
+            return
+          }
+          if (fresh.status === 'error') {
+            toast('Falha ao gerar relatório.', 'error')
+            queryClient.invalidateQueries({ queryKey: ['reports'] })
+            return
+          }
+        } catch {
+          // continua polling
+        }
+      }
+      // Timeout — apenas dispara refetch para refletir o estado atual
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
+    onError: (error) => {
+      toast(extractErrorMessage(error, 'Falha ao solicitar geração de relatório'), 'error')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteReport(id),
+    onSuccess: () => {
+      toast('Relatório removido.', 'success')
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
+    onError: (error) => {
+      toast(extractErrorMessage(error, 'Falha ao remover relatório'), 'error')
+    },
+  })
+
+  const handleGenerate = () => {
     if (!selectedExamId) return
-    const exam = exams.find((e) => e.id === selectedExamId)
-    const patient = patients.find((p) => p.id === exam?.patientId)
-    const doctor = doctors.find((d) => d.id === exam?.doctorId)
-    if (!exam) return
-
-    const newReport: Report = {
-      id: `report-${crypto.randomUUID()}`,
-      title: `Relatório de Antibiograma — ${exam.organism}`,
-      patientName: patient?.name ?? 'Paciente desconhecido',
-      examId: exam.id,
-      generatedAt: new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }),
-      status: 'generating',
-    }
-
-    setReports((prev) => [newReport, ...prev])
-    setRequesting(true)
-    setSelectedExamId('')
-
-    // Gera o PDF localmente via jsPDF (mock do que o backend fará futuramente)
-    // Quando o backend estiver pronto, substituir por:
-    //   const res = await fetch('/api/reports/generate', { method: 'POST', body: JSON.stringify({ examId: exam.id }) })
-    //   const data = await res.json()  // { url: '/output/report-xxx.pdf' }
-    //   const blobUrl = data.url   ← URL do servidor
-    await new Promise((res) => setTimeout(res, 800)) // simula latência
-    const blobUrl = buildAntibiogramPDFBlob(exam, patient, doctor)
-
-    setReports((prev) =>
-      prev.map((r) =>
-        r.id === newReport.id ? { ...r, status: 'ready', url: blobUrl } : r,
-      ),
-    )
-    setRequesting(false)
-    showToast('Relatório gerado com sucesso!')
-  }
-
-  const showToast = (msg: string) => {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3500)
+    generateMutation.mutate(selectedExamId)
   }
 
   const handleDelete = (id: string) => {
-    setReports((prev) => prev.filter((r) => r.id !== id))
+    if (confirm('Remover este relatório?')) deleteMutation.mutate(id)
   }
 
-  const handleDownload = (report: Report) => {
-    const exam = exams.find((e) => e.id === report.examId)
-    const patient = patients.find((p) => p.id === exam?.patientId)
-    const doctor = doctors.find((d) => d.id === exam?.doctorId)
-    if (exam) generateAntibiogramPDF(exam, patient, doctor)
+  /**
+   * Visualiza o PDF.
+   * - Se o backend já tem `storageUrl`, redireciona o viewer para essa URL.
+   * - Caso contrário, gera um PDF local com jsPDF como fallback (útil enquanto
+   *   o storage não está configurado).
+   */
+  const handleView = async (examId: string, title: string, storageUrl?: string) => {
+    if (storageUrl) {
+      sessionStorage.setItem('biolab:pdf:url', storageUrl)
+    } else {
+      try {
+        const exam = await getExam(examId)
+        // Para o fallback local, busca paciente/doutor pela primeira página
+        const [patientsPage, doctorsPage] = await Promise.all([
+          listPatients({ limit: 200 }),
+          listDoctors({ limit: 200 }),
+        ])
+        const patient = patientsPage.data.find((p) => p.id === exam.patientId)
+        const doctor  = doctorsPage.data.find((d) => d.id === exam.doctorId)
+        const blobUrl = buildAntibiogramPDFBlob(exam, patient, doctor)
+        sessionStorage.setItem('biolab:pdf:url', blobUrl)
+      } catch (error) {
+        toast(extractErrorMessage(error, 'Falha ao gerar visualização do PDF'), 'error')
+        return
+      }
+    }
+    navigate(
+      `/pdf-viewer?title=${encodeURIComponent(title)}&filename=${encodeURIComponent(title + '.pdf')}`,
+    )
   }
+
+  const handleDownload = async (examId: string, storageUrl?: string) => {
+    if (storageUrl) {
+      const a = document.createElement('a')
+      a.href = storageUrl
+      a.download = ''
+      a.click()
+      return
+    }
+    // Fallback: baixa via jsPDF
+    try {
+      const exam = await getExam(examId)
+      const [patientsPage, doctorsPage] = await Promise.all([
+        listPatients({ limit: 200 }),
+        listDoctors({ limit: 200 }),
+      ])
+      const patient = patientsPage.data.find((p) => p.id === exam.patientId)
+      const doctor  = doctorsPage.data.find((d) => d.id === exam.doctorId)
+      generateAntibiogramPDF(exam, patient, doctor)
+    } catch (error) {
+      toast(extractErrorMessage(error, 'Falha ao baixar PDF'), 'error')
+    }
+  }
+
+  const reports = reportsQuery.data?.data ?? []
+  const exams = examsQuery.data?.data ?? []
 
   return (
     <div className="page-content">
-      {/* Toast */}
-      {toast && <div className="profile-toast">{toast}</div>}
-
       {/* ── Gerador ─────────────────────────────────────────── */}
       <section className="card report-generator">
         <div className="card__header">
@@ -166,25 +217,22 @@ export function ReportsPage() {
             className="input"
             value={selectedExamId}
             onChange={(e) => setSelectedExamId(e.target.value)}
-            disabled={requesting}
+            disabled={generateMutation.isPending || examsQuery.isLoading}
           >
             <option value="">— Selecione um antibiograma —</option>
-            {exams.map((exam) => {
-              const pt = patients.find((p) => p.id === exam.patientId)
-              return (
-                <option key={exam.id} value={exam.id}>
-                  {pt?.name ?? 'Paciente'} · {exam.organism} · {exam.collectedAt}
-                </option>
-              )
-            })}
+            {exams.map((exam) => (
+              <option key={exam.id} value={exam.id}>
+                {(exam.patientName ?? 'Paciente')} · {exam.organism} · {exam.collectedAt}
+              </option>
+            ))}
           </select>
 
           <button
             className="btn btn--primary"
             onClick={handleGenerate}
-            disabled={!selectedExamId || requesting}
+            disabled={!selectedExamId || generateMutation.isPending}
           >
-            {requesting ? (
+            {generateMutation.isPending ? (
               <>
                 <IconSpinner /> Gerando…
               </>
@@ -197,7 +245,7 @@ export function ReportsPage() {
         </div>
 
         <p className="report-generator__hint">
-          💡 PDF gerado localmente via jsPDF. Quando o backend estiver pronto, será substituído pelo documento do servidor.
+          💡 O backend processa o PDF em background. Quando ficar pronto, ele aparece como "Pronto" abaixo.
         </p>
       </section>
 
@@ -208,7 +256,18 @@ export function ReportsPage() {
           <span className="badge badge--info">{reports.length} documento{reports.length !== 1 ? 's' : ''}</span>
         </div>
 
-        {reports.length === 0 ? (
+        {reportsQuery.isLoading ? (
+          <div style={{ padding: 'var(--space-8)', textAlign: 'center' }}>
+            <Spinner size="lg" />
+          </div>
+        ) : reportsQuery.isError ? (
+          <div style={{ padding: 'var(--space-4)' }}>
+            <p className="muted">Erro ao carregar relatórios: {extractErrorMessage(reportsQuery.error)}</p>
+            <button className="btn btn--primary" onClick={() => reportsQuery.refetch()} style={{ marginTop: 'var(--space-3)' }}>
+              Tentar novamente
+            </button>
+          </div>
+        ) : reports.length === 0 ? (
           <div className="empty-state">
             <span className="empty-state__icon">📄</span>
             <p className="empty-state__title">Nenhum relatório ainda</p>
@@ -216,63 +275,66 @@ export function ReportsPage() {
           </div>
         ) : (
           <div className="report-list">
-            {reports.map((report) => (
-              <div
-                key={report.id}
-                className={`report-item${report.status === 'generating' ? ' report-item--generating' : ''}`}
-              >
-                <div className="report-item__icon">
-                  <IconPDF />
-                </div>
-                <div className="report-item__info">
-                  <p className="report-item__title">{report.title}</p>
-                  <p className="report-item__meta">
-                    {report.patientName} · Gerado em {report.generatedAt}
-                  </p>
-                </div>
-                <div className="report-item__status">
-                  {report.status === 'generating' ? (
-                    <IconSpinner />
-                  ) : report.status === 'error' ? (
-                    <span title="Erro na geração"><IconError /></span>
-                  ) : (
-                    <StatusBadge status={report.status} />
-                  )}
-                </div>
-                <div className="report-item__actions">
-                  {report.status === 'ready' && report.url && (
-                    <>
+            {reports.map((report) => {
+              const isPending = report.status === 'generating' || report.status === 'pending'
+              return (
+                <div
+                  key={report.id}
+                  className={`report-item${isPending ? ' report-item--generating' : ''}`}
+                >
+                  <div className="report-item__icon">
+                    <IconPDF />
+                  </div>
+                  <div className="report-item__info">
+                    <p className="report-item__title">{report.title}</p>
+                    <p className="report-item__meta">
+                      {report.patientName ?? 'Paciente'} · {report.generatedAt
+                        ? `Gerado em ${new Date(report.generatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}`
+                        : 'Aguardando geração'}
+                    </p>
+                  </div>
+                  <div className="report-item__status">
+                    {isPending ? (
+                      <IconSpinner />
+                    ) : report.status === 'error' ? (
+                      <span title="Erro na geração"><IconError /></span>
+                    ) : (
+                      <StatusBadge status={report.status} />
+                    )}
+                  </div>
+                  <div className="report-item__actions">
+                    {report.status === 'ready' && (
+                      <>
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          title="Visualizar"
+                          onClick={() => handleView(report.examId, report.title, report.storageUrl)}
+                        >
+                          <IconEye />
+                        </button>
+                        <button
+                          className="btn btn--ghost btn--sm"
+                          title="Baixar PDF"
+                          onClick={() => handleDownload(report.examId, report.storageUrl)}
+                        >
+                          <IconDownload />
+                        </button>
+                      </>
+                    )}
+                    {!isPending && (
                       <button
-                        className="btn btn--ghost btn--sm"
-                        title="Visualizar"
-                        onClick={() => {
-                          sessionStorage.setItem('biolab:pdf:url', report.url!)
-                          navigate(`/pdf-viewer?title=${encodeURIComponent(report.title)}&filename=${encodeURIComponent(report.title + '.pdf')}`)
-                        }}
+                        className="btn btn--ghost btn--sm report-item__delete"
+                        title="Remover"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => handleDelete(report.id)}
                       >
-                        <IconEye />
+                        ✕
                       </button>
-                      <button
-                        className="btn btn--ghost btn--sm"
-                        title="Baixar PDF"
-                        onClick={() => handleDownload(report)}
-                      >
-                        <IconDownload />
-                      </button>
-                    </>
-                  )}
-                  {report.status !== 'generating' && (
-                    <button
-                      className="btn btn--ghost btn--sm report-item__delete"
-                      title="Remover"
-                      onClick={() => handleDelete(report.id)}
-                    >
-                      ✕
-                    </button>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </section>

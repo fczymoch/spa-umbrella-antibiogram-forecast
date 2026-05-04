@@ -4,10 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import type { Location } from 'react-router-dom'
 import { AuthBrandPanel } from '../components/AuthBrandPanel.tsx'
 import { BiolabLogo } from '../components/BiolabLogo.tsx'
-
-interface LoginPageProps {
-  onLogin: (email: string) => void
-}
+import { useAuth } from '../hooks/useAuth.ts'
+import { extractErrorMessage } from '../api/client.ts'
 
 function IconEmail() {
   return (
@@ -51,14 +49,16 @@ function IconArrow() {
   )
 }
 
-export function LoginPage({ onLogin }: LoginPageProps) {
+export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [touched, setTouched] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [serverError, setServerError] = useState<string | null>(null)
 
   const emailError =
     touched && !email
@@ -67,16 +67,25 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         ? 'Informe um e-mail válido.'
         : null
 
+  const passwordError = touched && !password ? 'Senha é obrigatória.' : null
+
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     setTouched(true)
-    if (!email || emailError) return
+    setServerError(null)
+    if (!email || emailError || !password) return
+
     setLoading(true)
-    await new Promise((r) => setTimeout(r, 600))
-    onLogin(email)
-    const redirectTo =
-      (location.state as { from?: Location } | undefined)?.from?.pathname || '/app'
-    navigate(redirectTo)
+    try {
+      await login({ email, password })
+      const redirectTo =
+        (location.state as { from?: Location } | undefined)?.from?.pathname || '/app'
+      navigate(redirectTo, { replace: true })
+    } catch (error) {
+      setServerError(extractErrorMessage(error, 'Não foi possível autenticar. Verifique e tente novamente.'))
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -133,7 +142,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             {/* Campo senha */}
             <div className="auth-field">
               <div className="auth-field__label-row">
-                <label htmlFor="password">Senha</label>
+                <label htmlFor="password">Senha <span className="auth-field__required" aria-hidden="true">*</span></label>
               </div>
               <div className="auth-field__input-wrap">
                 <span className="auth-field__icon"><IconLock /></span>
@@ -144,6 +153,9 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onBlur={() => setTouched(true)}
+                  aria-invalid={!!passwordError}
+                  style={passwordError ? { borderColor: 'var(--color-alert-border)' } : undefined}
                 />
                 <button
                   type="button"
@@ -154,10 +166,21 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                   <IconEye open={showPassword} />
                 </button>
               </div>
+              {passwordError && (
+                <p role="alert" className="auth-field__error">
+                  {passwordError}
+                </p>
+              )}
               <a href="#" className="auth-field__forgot" onClick={(e) => e.preventDefault()}>
                 Esqueci minha senha
               </a>
             </div>
+
+            {serverError && (
+              <p role="alert" className="auth-field__error" style={{ marginTop: 'var(--space-2)' }}>
+                {serverError}
+              </p>
+            )}
 
             <button
               type="submit"

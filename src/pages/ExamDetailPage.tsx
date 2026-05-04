@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Bar } from 'react-chartjs-2'
 import {
   BarElement,
@@ -10,25 +11,27 @@ import {
   Title,
   Tooltip,
 } from 'chart.js'
-import type { Doctor, Exam, Patient } from '../types.ts'
+import { getExam } from '../api/exams.ts'
+import { Spinner } from '../components/Spinner.tsx'
+import { extractErrorMessage } from '../api/client.ts'
 import { colorFromInterpretation, mapInterpretation, statusClass } from '../utils/status.ts'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
-interface ExamDetailPageProps {
-  exams: Exam[]
-  patients: Patient[]
-  doctors: Doctor[]
-}
-
-export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps) {
+export function ExamDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const exam = exams.find((item) => item.id === id)
-  const patient = exam ? patients.find((p) => p.id === exam.patientId) : undefined
-  const doctor = exam ? doctors.find((d) => d.id === exam.doctorId) : undefined
+
+  const examQuery = useQuery({
+    queryKey: ['exam', id],
+    queryFn: () => getExam(id!),
+    enabled: Boolean(id),
+  })
+
+  const exam = examQuery.data
 
   const formatDateTime = (value: string) => {
-    const date = new Date(value.replace(' ', 'T'))
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T')
+    const date = new Date(normalized)
     if (Number.isNaN(date.getTime())) return value
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
@@ -48,7 +51,7 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
   const currentStatusIndex = exam ? statusSteps.findIndex((s) => s.label === exam.status) : -1
 
   const chartData = useMemo(() => {
-    if (!exam) return null
+    if (!exam || !exam.antibiogram?.length) return null
     return {
       labels: exam.antibiogram.map((entry) => entry.antibiotic),
       datasets: [
@@ -65,12 +68,23 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
     }
   }, [exam])
 
-  if (!exam) {
+  if (examQuery.isLoading) {
+    return (
+      <div className="page" style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-8)' }}>
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (examQuery.isError || !exam) {
     return (
       <div className="page">
         <div className="page-header">
           <h1>Antibiograma não encontrado</h1>
         </div>
+        <p className="muted" style={{ marginBottom: 'var(--space-3)' }}>
+          {examQuery.error ? extractErrorMessage(examQuery.error) : 'Não foi possível carregar o exame.'}
+        </p>
         <Link className="pill subtle" to="/app/exams">← Voltar para antibiogramas</Link>
       </div>
     )
@@ -151,8 +165,8 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
             <h3>Dados clínicos</h3>
             <span className="pill subtle">Coletado em {formatDateTime(exam.collectedAt)}</span>
           </div>
-          <p className="muted">Paciente: <strong>{patient?.name || 'Paciente'}</strong></p>
-          <p className="muted" style={{ marginTop: 'var(--space-2)' }}>Médico: <strong>{doctor?.name || 'Equipe'}</strong></p>
+          <p className="muted">Paciente: <strong>{exam.patientName ?? 'Paciente'}</strong></p>
+          <p className="muted" style={{ marginTop: 'var(--space-2)' }}>Médico: <strong>{exam.doctorName ?? 'Equipe'}</strong></p>
           {exam.notes && (
             <p className="muted" style={{ marginTop: 'var(--space-2)' }}>
               Observações: {exam.notes}
@@ -174,8 +188,8 @@ export function ExamDetailPage({ exams, patients, doctors }: ExamDetailPageProps
               </tr>
             </thead>
             <tbody>
-              {exam.antibiogram.map((entry) => (
-                <tr key={entry.antibiotic}>
+              {(exam.antibiogram ?? []).map((entry) => (
+                <tr key={entry.id ?? entry.antibiotic}>
                   <td>{entry.antibiotic}</td>
                   <td>{entry.mic}</td>
                   <td>
